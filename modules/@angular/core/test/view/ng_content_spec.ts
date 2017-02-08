@@ -6,41 +6,23 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {RenderComponentType, RootRenderer, Sanitizer, SecurityContext, TemplateRef, ViewContainerRef, ViewEncapsulation, getDebugNode} from '@angular/core';
-import {DebugContext, DefaultServices, NodeDef, NodeFlags, Services, ViewData, ViewDefinition, ViewFlags, ViewHandleEventFn, ViewUpdateFn, anchorDef, asElementData, asProviderData, asTextData, attachEmbeddedView, checkAndUpdateView, checkNoChangesView, checkNodeDynamic, checkNodeInline, createEmbeddedView, createRootView, detachEmbeddedView, elementDef, ngContentDef, providerDef, rootRenderNodes, setCurrentNode, textDef, viewDef} from '@angular/core/src/view/index';
+import {Injector, RenderComponentType, RootRenderer, Sanitizer, SecurityContext, TemplateRef, ViewContainerRef, ViewEncapsulation, getDebugNode} from '@angular/core';
+import {DebugContext, NodeDef, NodeFlags, RootData, Services, ViewData, ViewDefinition, ViewFlags, ViewHandleEventFn, ViewUpdateFn, anchorDef, asElementData, asProviderData, asTextData, attachEmbeddedView, detachEmbeddedView, directiveDef, elementDef, ngContentDef, rootRenderNodes, textDef, viewDef} from '@angular/core/src/view/index';
 import {inject} from '@angular/core/testing';
 import {getDOM} from '@angular/platform-browser/src/dom/dom_adapter';
 
-import {isBrowser, setupAndCheckRenderer} from './helper';
+import {createRootView, isBrowser} from './helper';
 
 export function main() {
-  if (isBrowser()) {
-    defineTests({directDom: true, viewFlags: ViewFlags.DirectDom});
-  }
-  defineTests({directDom: false, viewFlags: 0});
-}
-
-function defineTests(config: {directDom: boolean, viewFlags: number}) {
-  describe(`View NgContent, directDom: ${config.directDom}`, () => {
-    setupAndCheckRenderer(config);
-
-    let services: Services;
-    let renderComponentType: RenderComponentType;
-
-    beforeEach(
-        inject([RootRenderer, Sanitizer], (rootRenderer: RootRenderer, sanitizer: Sanitizer) => {
-          services = new DefaultServices(rootRenderer, sanitizer);
-          renderComponentType =
-              new RenderComponentType('1', 'someUrl', 0, ViewEncapsulation.None, [], {});
-        }));
-
+  describe(`View NgContent`, () => {
     function compViewDef(
-        nodes: NodeDef[], update?: ViewUpdateFn, handleEvent?: ViewHandleEventFn): ViewDefinition {
-      return viewDef(config.viewFlags, nodes, update, handleEvent, renderComponentType);
+        nodes: NodeDef[], update?: ViewUpdateFn, handleEvent?: ViewHandleEventFn,
+        viewFlags: ViewFlags = ViewFlags.None): ViewDefinition {
+      return viewDef(viewFlags, nodes, update, handleEvent);
     }
 
     function embeddedViewDef(nodes: NodeDef[], update?: ViewUpdateFn): ViewDefinition {
-      return viewDef(config.viewFlags, nodes, update);
+      return viewDef(ViewFlags.None, nodes, update);
     }
 
     function hostElDef(contentNodes: NodeDef[], viewNodes: NodeDef[]): NodeDef[] {
@@ -50,14 +32,14 @@ function defineTests(config: {directDom: boolean, viewFlags: number}) {
 
       return [
         elementDef(NodeFlags.None, null, null, 1 + contentNodes.length, 'acomp'),
-        providerDef(NodeFlags.None, null, 0, AComp, [], null, null, () => aCompViewDef),
+        directiveDef(NodeFlags.None, null, 0, AComp, [], null, null, () => aCompViewDef),
         ...contentNodes
       ];
     }
 
     function createAndGetRootNodes(
         viewDef: ViewDefinition, ctx?: any): {rootNodes: any[], view: ViewData} {
-      const view = createRootView(services, () => viewDef, ctx || {});
+      const view = createRootView(viewDef, ctx || {});
       const rootNodes = rootRenderNodes(view);
       return {rootNodes, view};
     }
@@ -106,7 +88,7 @@ function defineTests(config: {directDom: boolean, viewFlags: number}) {
           [
             anchorDef(
                 NodeFlags.HasEmbeddedViews, null, 0, 1, embeddedViewDef([textDef(null, ['a'])])),
-            providerDef(
+            directiveDef(
                 NodeFlags.None, null, 0, CreateViewService, [TemplateRef, ViewContainerRef])
           ],
           [elementDef(NodeFlags.None, null, null, 1, 'div'), ngContentDef(null, 0)])));
@@ -126,7 +108,7 @@ function defineTests(config: {directDom: boolean, viewFlags: number}) {
       ])));
 
       const componentView = asProviderData(view, 1).componentView;
-      const view0 = createEmbeddedView(componentView, componentView.def.nodes[1]);
+      const view0 = Services.createEmbeddedView(componentView, componentView.def.nodes[1]);
 
       attachEmbeddedView(asElementData(componentView, 1), 0, view0);
       expect(getDOM().childNodes(getDOM().firstChild(rootNodes[0])).length).toBe(2);
@@ -136,5 +118,18 @@ function defineTests(config: {directDom: boolean, viewFlags: number}) {
       detachEmbeddedView(asElementData(componentView, 1), 0);
       expect(getDOM().childNodes(getDOM().firstChild(rootNodes[0])).length).toBe(1);
     });
+
+    if (isBrowser()) {
+      it('should use root projectable nodes', () => {
+        const projectableNodes = [[document.createTextNode('a')], [document.createTextNode('b')]];
+        const view = createRootView(
+            compViewDef(hostElDef([], [ngContentDef(null, 0), ngContentDef(null, 1)])), {},
+            projectableNodes);
+        const rootNodes = rootRenderNodes(view);
+
+        expect(getDOM().childNodes(rootNodes[0])[0]).toBe(projectableNodes[0][0]);
+        expect(getDOM().childNodes(rootNodes[0])[1]).toBe(projectableNodes[1][0]);
+      });
+    }
   });
 }

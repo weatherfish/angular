@@ -29,20 +29,8 @@ export function attachEmbeddedView(elementData: ElementData, viewIndex: number, 
     dirtyParentQuery(queryId, view);
   }
 
-  // update rendering
   const prevView = viewIndex > 0 ? embeddedViews[viewIndex - 1] : null;
-  const prevRenderNode =
-      prevView ? renderNode(prevView, prevView.def.lastRootNode) : elementData.renderElement;
-  if (view.renderer) {
-    view.renderer.attachViewAfter(prevRenderNode, rootRenderNodes(view));
-  } else {
-    const parentNode = prevRenderNode.parentNode;
-    const nextSibling = prevRenderNode.nextSibling;
-    if (parentNode) {
-      const action = nextSibling ? RenderNodeAction.InsertBefore : RenderNodeAction.AppendChild;
-      visitRootRenderNodes(view, action, parentNode, nextSibling, undefined);
-    }
-  }
+  renderAttachEmbeddedView(elementData, prevView, view);
 }
 
 export function detachEmbeddedView(elementData: ElementData, viewIndex: number): ViewData {
@@ -63,16 +51,48 @@ export function detachEmbeddedView(elementData: ElementData, viewIndex: number):
     dirtyParentQuery(queryId, view);
   }
 
-  // update rendering
-  if (view.renderer) {
-    view.renderer.detachView(rootRenderNodes(view));
-  } else {
-    const parentNode = elementData.renderElement.parentNode;
-    if (parentNode) {
-      visitRootRenderNodes(view, RenderNodeAction.RemoveChild, parentNode, null, undefined);
-    }
-  }
+  renderDetachEmbeddedView(elementData, view);
+
   return view;
+}
+
+export function moveEmbeddedView(
+    elementData: ElementData, oldViewIndex: number, newViewIndex: number): ViewData {
+  const embeddedViews = elementData.embeddedViews;
+  const view = embeddedViews[oldViewIndex];
+  removeFromArray(embeddedViews, oldViewIndex);
+  if (newViewIndex == null) {
+    newViewIndex = embeddedViews.length;
+  }
+  addToArray(embeddedViews, newViewIndex, view);
+
+  // Note: Don't need to change projectedViews as the order in there
+  // as always invalid...
+
+  for (let queryId in view.def.nodeMatchedQueries) {
+    dirtyParentQuery(queryId, view);
+  }
+
+  renderDetachEmbeddedView(elementData, view);
+  const prevView = newViewIndex > 0 ? embeddedViews[newViewIndex - 1] : null;
+  renderAttachEmbeddedView(elementData, prevView, view);
+
+  return view;
+}
+
+function renderAttachEmbeddedView(elementData: ElementData, prevView: ViewData, view: ViewData) {
+  const prevRenderNode =
+      prevView ? renderNode(prevView, prevView.def.lastRootNode) : elementData.renderElement;
+  const parentNode = view.root.renderer.parentNode(prevRenderNode);
+  const nextSibling = view.root.renderer.nextSibling(prevRenderNode);
+  // Note: We can't check if `nextSibling` is present, as on WebWorkers it will always be!
+  // However, browsers automatically do `appendChild` when there is no `nextSibling`.
+  visitRootRenderNodes(view, RenderNodeAction.InsertBefore, parentNode, nextSibling, undefined);
+}
+
+function renderDetachEmbeddedView(elementData: ElementData, view: ViewData) {
+  const parentNode = view.root.renderer.parentNode(elementData.renderElement);
+  visitRootRenderNodes(view, RenderNodeAction.RemoveChild, parentNode, null, undefined);
 }
 
 function addToArray(arr: any[], index: number, value: any) {

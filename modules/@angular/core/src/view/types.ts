@@ -7,10 +7,13 @@
  */
 
 import {PipeTransform} from '../change_detection/change_detection';
+import {Injector} from '../di';
+import {ComponentRef} from '../linker/component_factory';
 import {QueryList} from '../linker/query_list';
 import {TemplateRef} from '../linker/template_ref';
 import {ViewContainerRef} from '../linker/view_container_ref';
-import {RenderComponentType, RenderDebugInfo, Renderer, RootRenderer} from '../render/api';
+import {ViewRef} from '../linker/view_ref';
+import {ViewEncapsulation} from '../metadata/view';
 import {Sanitizer, SecurityContext} from '../security';
 
 // -------------------------------------
@@ -19,7 +22,7 @@ import {Sanitizer, SecurityContext} from '../security';
 
 export interface ViewDefinition {
   flags: ViewFlags;
-  componentType: RenderComponentType;
+  component: ComponentDefinition;
   update: ViewUpdateFn;
   handleEvent: ViewHandleEventFn;
   /**
@@ -46,17 +49,38 @@ export interface ViewDefinition {
 
 export type ViewDefinitionFactory = () => ViewDefinition;
 
-export type ViewUpdateFn = (view: ViewData) => void;
+export type ViewUpdateFn = (check: NodeCheckFn, view: ViewData) => void;
 
-export type ViewHandleEventFn =
-    (view: ViewData, nodeIndex: number, eventName: string, event: any) => boolean;
+// helper functions to create an overloaded function type.
+export declare function _nodeCheckFn(
+    view: ViewData, nodeIndex: number, argStyle: ArgumentType.Dynamic, values: any[]): any;
+    export declare function _nodeCheckFn(
+        view: ViewData, nodeIndex: number, argStyle: ArgumentType.Inline, v0?: any, v1?: any,
+        v2?: any, v3?: any, v4?: any, v5?: any, v6?: any, v7?: any, v8?: any, v9?: any):
+        any;
+
+    export type NodeCheckFn = typeof _nodeCheckFn;
+
+    export type ViewHandleEventFn =
+        (view: ViewData, nodeIndex: number, eventName: string, event: any) => boolean;
+
+    export enum ArgumentType {
+      Inline, Dynamic
+    }
 
 /**
  * Bitmask for ViewDefintion.flags.
  */
 export enum ViewFlags {
   None = 0,
-  DirectDom = 1 << 1
+  DirectDom = 1 << 1,
+  OnPush = 1 << 2
+}
+
+export interface ComponentDefinition {
+  id: string;
+  encapsulation: ViewEncapsulation;
+  styles: string[];
 }
 
 /**
@@ -125,6 +149,7 @@ export enum NodeFlags {
   HasComponent = 1 << 9,
   HasContentQuery = 1 << 10,
   HasViewQuery = 1 << 11,
+  LazyProvider = 1 << 12
 }
 
 export interface BindingDef {
@@ -161,8 +186,6 @@ export interface ElementDef {
   /**
    * visible providers for DI in the view,
    * as see from this element.
-   * Note: We use protoypical inheritance
-   * to indices in parent ElementDefs.
    */
   providerIndices: {[tokenKey: string]: number};
   source: string;
@@ -174,13 +197,21 @@ export interface ElementOutputDef {
 }
 
 export interface ProviderDef {
+  type: ProviderType;
   token: any;
   tokenKey: string;
-  ctor: any;
+  value: any;
   deps: DepDef[];
   outputs: ProviderOutputDef[];
   // closure to allow recursive components
   component: ViewDefinitionFactory;
+}
+
+export enum ProviderType {
+  Value,
+  Class,
+  Factory,
+  UseExisting
 }
 
 export interface DepDef {
@@ -194,7 +225,8 @@ export interface DepDef {
  */
 export enum DepFlags {
   None = 0,
-  SkipSelf = 1 << 0
+  SkipSelf = 1 << 0,
+  Optional = 1 << 1
 }
 
 export interface ProviderOutputDef {
@@ -253,15 +285,10 @@ export interface NgContentDef {
  */
 export interface ViewData {
   def: ViewDefinition;
-  renderer: Renderer;
-  services: Services;
+  root: RootData;
   // index of parent element / anchor. Not the index
   // of the provider with the component view.
   parentIndex: number;
-  // for component views, this is the same as parentIndex.
-  // for embedded views, this is the index of the parent node
-  // that contains the view container.
-  parentDiIndex: number;
   parent: ViewData;
   component: any;
   context: any;
@@ -271,9 +298,19 @@ export interface ViewData {
   // and call the right accessor (e.g. `elementData`) based on
   // the NodeType.
   nodes: {[key: number]: NodeData};
-  firstChange: boolean;
+  state: ViewState;
   oldValues: any[];
   disposables: DisposableFn[];
+}
+
+/**
+ * Bitmask of states
+ */
+export enum ViewState {
+  FirstCheck = 1 << 0,
+  ChecksEnabled = 1 << 1,
+  Errored = 1 << 2,
+  Destroyed = 1 << 3
 }
 
 export type DisposableFn = () => void;
@@ -368,31 +405,106 @@ export function asQueryList(view: ViewData, index: number): QueryList<any> {
   return <any>view.nodes[index];
 }
 
-export interface Services {
-  renderComponent(rcp: RenderComponentType): Renderer;
-  sanitize(context: SecurityContext, value: string): string;
-  // Note: This needs to be here to prevent a cycle in source files.
-  createViewContainerRef(data: ElementData): ViewContainerRef;
-  // Note: This needs to be here to prevent a cycle in source files.
-  createTemplateRef(parentView: ViewData, def: NodeDef): TemplateRef<any>;
-  // Note: This needs to be here to prevent a cycle in source files.
-  createDebugContext(view: ViewData, nodeIndex: number): DebugContext;
+export interface RootData {
+  injector: Injector;
+  projectableNodes: any[][];
+  element: any;
+  renderer: RendererV2;
+  sanitizer: Sanitizer;
+}
+
+/**
+ * TODO(tbosch): move this interface into @angular/core/src/render/api,
+ * and implement it in @angular/platform-browser, ...
+ */
+export interface RendererV2 {
+  createElement(name: string, debugInfo?: RenderDebugContext): any;
+  createComment(value: string, debugInfo?: RenderDebugContext): any;
+  createText(value: string, debugInfo?: RenderDebugContext): any;
+  appendChild(parent: any, newChild: any): void;
+  insertBefore(parent: any, newChild: any, refChild: any): void;
+  removeChild(parent: any, oldChild: any): void;
+  selectRootElement(selectorOrNode: string|any, debugInfo?: RenderDebugContext): any;
+  /**
+   * Attention: On WebWorkers, this will always return a value,
+   * as we are asking for a result synchronously. I.e.
+   * the caller can't rely on checking whether this is null or not.
+   */
+  parentNode(node: any): any;
+  /**
+   * Attention: On WebWorkers, this will always return a value,
+   * as we are asking for a result synchronously. I.e.
+   * the caller can't rely on checking whether this is null or not.
+   */
+  nextSibling(node: any): any;
+  setAttribute(el: any, name: string, value: string): void;
+  removeAttribute(el: any, name: string): void;
+  addClass(el: any, name: string): void;
+  removeClass(el: any, name: string): void;
+  setStyle(el: any, style: string, value: any): void;
+  removeStyle(el: any, style: string): void;
+  setProperty(el: any, name: string, value: any): void;
+  setText(node: any, value: string): void;
+  listen(target: 'window'|'document'|any, eventName: string, callback: (event: any) => boolean):
+      () => void;
+}
+
+export abstract class RenderDebugContext {
+  abstract get injector(): Injector;
+  abstract get component(): any;
+  abstract get providerTokens(): any[];
+  abstract get references(): {[key: string]: any};
+  abstract get context(): any;
+  abstract get source(): string;
+  abstract get componentRenderElement(): any;
+  abstract get renderNode(): any;
+}
+
+export abstract class DebugContext extends RenderDebugContext {
+  abstract get view(): ViewData;
+  abstract get nodeIndex(): number;
 }
 
 // -------------------------------------
 // Other
 // -------------------------------------
-export enum EntryAction {
-  CheckAndUpdate,
-  CheckNoChanges,
-  Create,
-  Destroy,
-  HandleEvent
+
+export interface Services {
+  setCurrentNode(view: ViewData, nodeIndex: number): void;
+  createRootView(
+      injector: Injector, projectableNodes: any[][], rootSelectorOrNode: string|any,
+      def: ViewDefinition, context?: any): ViewData;
+  createEmbeddedView(parent: ViewData, anchorDef: NodeDef, context?: any): ViewData;
+  checkAndUpdateView(view: ViewData): void;
+  checkNoChangesView(view: ViewData): void;
+  attachEmbeddedView(elementData: ElementData, viewIndex: number, view: ViewData): void;
+  detachEmbeddedView(elementData: ElementData, viewIndex: number): ViewData;
+  moveEmbeddedView(elementData: ElementData, oldViewIndex: number, newViewIndex: number): ViewData;
+  destroyView(view: ViewData): void;
+  resolveDep(
+      view: ViewData, requestNodeIndex: number, elIndex: number, depDef: DepDef,
+      notFoundValue?: any): any;
+  createDebugContext(view: ViewData, nodeIndex: number): DebugContext;
+  handleEvent: ViewHandleEventFn;
+  updateView: ViewUpdateFn;
 }
 
-export interface DebugContext extends RenderDebugInfo {
-  view: ViewData;
-  nodeIndex: number;
-  componentRenderElement: any;
-  renderNode: any;
-}
+/**
+ * This object is used to prevent cycles in the source files and to have a place where
+ * debug mode can hook it. It is lazily filled when `isDevMode` is known.
+ */
+export const Services: Services = {
+  setCurrentNode: undefined,
+  createRootView: undefined,
+  createEmbeddedView: undefined,
+  checkAndUpdateView: undefined,
+  checkNoChangesView: undefined,
+  destroyView: undefined,
+  attachEmbeddedView: undefined,
+  detachEmbeddedView: undefined,
+  moveEmbeddedView: undefined,
+  resolveDep: undefined,
+  createDebugContext: undefined,
+  handleEvent: undefined,
+  updateView: undefined,
+};

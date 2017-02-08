@@ -6,9 +6,8 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {resolveDep, tokenKey} from './provider';
-import {BindingDef, BindingType, DepDef, DepFlags, NodeData, NodeDef, NodeType, ProviderData, PureExpressionData, PureExpressionType, ViewData, asPureExpressionData} from './types';
-import {checkAndUpdateBinding} from './util';
+import {BindingDef, BindingType, DepDef, DepFlags, NodeData, NodeDef, NodeType, ProviderData, PureExpressionData, PureExpressionType, Services, ViewData, asPureExpressionData} from './types';
+import {checkAndUpdateBinding, tokenKey, unwrapValue} from './util';
 
 export function purePipeDef(pipeToken: any, argCount: number): NodeDef {
   return _pureExpressionDef(
@@ -64,7 +63,7 @@ function _pureExpressionDef(
 
 export function createPureExpression(view: ViewData, def: NodeDef): PureExpressionData {
   const pipe = def.pureExpression.pipeDep ?
-      resolveDep(view, def.parent, def.pureExpression.pipeDep) :
+      Services.resolveDep(view, def.index, def.parent, def.pureExpression.pipeDep) :
       undefined;
   return {value: undefined, pipe};
 }
@@ -98,8 +97,19 @@ export function checkAndUpdatePureExpressionInline(
       if (checkAndUpdateBinding(view, def, 0, v0)) changed = true;
   }
 
+  const data = asPureExpressionData(view, def.index);
   if (changed) {
-    const data = asPureExpressionData(view, def.index);
+    v0 = unwrapValue(v0);
+    v1 = unwrapValue(v1);
+    v2 = unwrapValue(v2);
+    v3 = unwrapValue(v3);
+    v4 = unwrapValue(v4);
+    v5 = unwrapValue(v5);
+    v6 = unwrapValue(v6);
+    v7 = unwrapValue(v7);
+    v8 = unwrapValue(v8);
+    v9 = unwrapValue(v9);
+
     let value: any;
     switch (def.pureExpression.type) {
       case PureExpressionType.Array:
@@ -191,6 +201,7 @@ export function checkAndUpdatePureExpressionInline(
     }
     data.value = value;
   }
+  return data.value;
 }
 
 export function checkAndUpdatePureExpressionDynamic(view: ViewData, def: NodeDef, values: any[]) {
@@ -203,23 +214,31 @@ export function checkAndUpdatePureExpressionDynamic(view: ViewData, def: NodeDef
       changed = true;
     }
   }
+  const data = asPureExpressionData(view, def.index);
   if (changed) {
-    const data = asPureExpressionData(view, def.index);
     let value: any;
     switch (def.pureExpression.type) {
       case PureExpressionType.Array:
-        value = values;
+        value = new Array(values.length);
+        for (let i = 0; i < values.length; i++) {
+          value[i] = unwrapValue(values[i]);
+        }
         break;
       case PureExpressionType.Object:
         value = {};
         for (let i = 0; i < values.length; i++) {
-          value[bindings[i].name] = values[i];
+          value[bindings[i].name] = unwrapValue(values[i]);
         }
         break;
       case PureExpressionType.Pipe:
-        value = data.pipe.transform(values[0], ...values.slice(1));
+        const params = new Array(values.length);
+        for (let i = 0; i < values.length; i++) {
+          params[i] = unwrapValue(values[i]);
+        }
+        value = (<any>data.pipe.transform)(...params);
         break;
     }
     data.value = value;
   }
+  return data.value;
 }

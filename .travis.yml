@@ -1,10 +1,11 @@
 language: node_js
 sudo: false
 node_js:
-  - '6.6.0'
+  - '6.9.5'
+
 git:
   # Increased from default (50) to ensure last release tag is in this range
-  depth: 75
+  depth: 150
 
 addons:
 #  firefox: "38.0"

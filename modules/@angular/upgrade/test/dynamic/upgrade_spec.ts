@@ -290,9 +290,11 @@ export function main() {
 
       it('should bind properties, events', async(() => {
            const adapter: UpgradeAdapter = new UpgradeAdapter(forwardRef(() => Ng2Module));
-           const ng1Module = angular.module('ng1', []);
+           const ng1Module =
+               angular.module('ng1', []).value('$exceptionHandler', (err: any) => { throw err; });
 
            ng1Module.run(($rootScope: any) => {
+             $rootScope.name = 'world';
              $rootScope.dataA = 'A';
              $rootScope.dataB = 'B';
              $rootScope.modelA = 'initModelA';
@@ -363,9 +365,10 @@ export function main() {
                    break;
                  case 1:
                    assertChange('twoWayA', 'newA');
+                   assertChange('twoWayB', 'newB');
                    break;
                  case 2:
-                   assertChange('twoWayB', 'newB');
+                   assertChange('interpolate', 'Hello everyone');
                    break;
                  default:
                    throw new Error('Called too many times! ' + JSON.stringify(changes));
@@ -380,7 +383,7 @@ export function main() {
                              }).Class({constructor: function() {}});
 
            const element = html(`<div>
-              <ng2 literal="Text" interpolate="Hello {{'world'}}"
+              <ng2 literal="Text" interpolate="Hello {{name}}"
                    bind-one-way-a="dataA" [one-way-b]="dataB"
                    bindon-two-way-a="modelA" [(two-way-b)]="modelB"
                    on-event-a='eventA=$event' (event-b)="eventB=$event"></ng2>
@@ -393,6 +396,15 @@ export function main() {
                      'literal: Text; interpolate: Hello world; ' +
                      'oneWayA: A; oneWayB: B; twoWayA: newA; twoWayB: newB; (2) | ' +
                      'modelA: newA; modelB: newB; eventA: aFired; eventB: bFired;');
+
+             ref.ng1RootScope.$apply('name = "everyone"');
+             expect(multiTrim(document.body.textContent))
+                 .toEqual(
+                     'ignore: -; ' +
+                     'literal: Text; interpolate: Hello everyone; ' +
+                     'oneWayA: A; oneWayB: B; twoWayA: newA; twoWayB: newB; (3) | ' +
+                     'modelA: newA; modelB: newB; eventA: aFired; eventB: bFired;');
+
              ref.dispose();
            });
 
@@ -531,6 +543,39 @@ export function main() {
            ng1Module.directive('ng2', adapter.downgradeNg2Component(Ng2));
            adapter.bootstrap(element, ['ng1']).ready((ref) => {
              expect(document.body.textContent).toEqual('2a(1a)2b(1b)');
+             ref.dispose();
+           });
+         }));
+
+      it('should correctly project structural directives', async(() => {
+           @Component({selector: 'ng2', template: 'ng2-{{ itemId }}(<ng-content></ng-content>)'})
+           class Ng2Component {
+             @Input() itemId: string;
+           }
+
+           @NgModule({imports: [BrowserModule], declarations: [Ng2Component]})
+           class Ng2Module {
+           }
+
+           const adapter: UpgradeAdapter = new UpgradeAdapter(Ng2Module);
+           const ng1Module = angular.module('ng1', [])
+                                 .directive('ng2', adapter.downgradeNg2Component(Ng2Component))
+                                 .run(($rootScope: angular.IRootScopeService) => {
+                                   $rootScope['items'] = [
+                                     {id: 'a', subitems: [1, 2, 3]}, {id: 'b', subitems: [4, 5, 6]},
+                                     {id: 'c', subitems: [7, 8, 9]}
+                                   ];
+                                 });
+
+           const element = html(`
+             <ng2 ng-repeat="item in items" [item-id]="item.id">
+               <div ng-repeat="subitem in item.subitems">{{ subitem }}</div>
+             </ng2>
+           `);
+
+           adapter.bootstrap(element, [ng1Module.name]).ready(ref => {
+             expect(multiTrim(document.body.textContent))
+                 .toBe('ng2-a( 123 )ng2-b( 456 )ng2-c( 789 )');
              ref.dispose();
            });
          }));

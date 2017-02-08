@@ -1,21 +1,35 @@
 import { BrowserModule } from '@angular/platform-browser';
 import { NgModule } from '@angular/core';
-import { RouterModule } from '@angular/router';
-import { AppComponent } from './app.component';
+import { HttpModule } from '@angular/http';
 import { MdToolbarModule } from '@angular/material/toolbar';
+import { MdButtonModule} from '@angular/material/button';
+
+import { AppComponent } from './app.component';
+import { DocViewerComponent } from './doc-viewer/doc-viewer.component';
+import { embeddedComponents, EmbeddedComponents } from './embedded';
+import { Logger } from './logger.service';
+import { navDirectives, navProviders } from './nav-engine';
 
 @NgModule({
-  declarations: [
-    AppComponent
-  ],
   imports: [
     BrowserModule,
+    HttpModule,
     MdToolbarModule.forRoot(),
-    RouterModule.forRoot([
-      { path: '', loadChildren: './home-page/home-page.module#HomePageModule'}
-    ])
+    MdButtonModule.forRoot()
   ],
-  providers: [],
+  declarations: [
+    AppComponent,
+    embeddedComponents,
+    DocViewerComponent,
+    navDirectives,
+  ],
+  providers: [
+    EmbeddedComponents,
+    Logger,
+    navProviders
+  ],
+  entryComponents: [ embeddedComponents ],
   bootstrap: [AppComponent]
 })
-export class AppModule { }
+export class AppModule {
+}

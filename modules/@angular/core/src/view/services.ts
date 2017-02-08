@@ -6,133 +6,253 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
+import {isDevMode} from '../application_ref';
 import {Injectable, Injector} from '../di';
-import {unimplemented} from '../facade/errors';
-import {ComponentFactory, ComponentRef} from '../linker/component_factory';
+import {looseIdentical} from '../facade/lang';
 import {ElementRef} from '../linker/element_ref';
-import {TemplateRef} from '../linker/template_ref';
-import {ViewContainerRef} from '../linker/view_container_ref';
-import {EmbeddedViewRef, ViewRef} from '../linker/view_ref';
-import {RenderComponentType, Renderer, RootRenderer} from '../render/api';
+import * as v1renderer from '../render/api';
 import {Sanitizer, SecurityContext} from '../security';
+import {Type} from '../type';
 
-import {createInjector} from './provider';
+import {isViewDebugError, viewDestroyedError, viewWrappedDebugError} from './errors';
+import {resolveDep} from './provider';
 import {getQueryValue} from './query';
-import {DebugContext, ElementData, NodeData, NodeDef, NodeType, Services, ViewData, ViewDefinition, asElementData} from './types';
-import {isComponentView, renderNode, rootRenderNodes} from './util';
-import {checkAndUpdateView, checkNoChangesView, createEmbeddedView, destroyView} from './view';
-import {attachEmbeddedView, detachEmbeddedView} from './view_attach';
+import {createInjector} from './refs';
+import {DirectDomRenderer, LegacyRendererAdapter} from './renderer';
+import {ArgumentType, BindingType, DebugContext, DepFlags, ElementData, NodeCheckFn, NodeData, NodeDef, NodeType, RendererV2, RootData, Services, ViewData, ViewDefinition, ViewDefinitionFactory, ViewState, asElementData, asProviderData} from './types';
+import {checkBinding, findElementDef, isComponentView, parentDiIndex, renderNode, resolveViewDefinition, rootRenderNodes} from './util';
+import {checkAndUpdateView, checkNoChangesView, createEmbeddedView, createRootView, destroyView} from './view';
+import {attachEmbeddedView, detachEmbeddedView, moveEmbeddedView} from './view_attach';
 
-@Injectable()
-export class DefaultServices implements Services {
-  constructor(private _rootRenderer: RootRenderer, private _sanitizer: Sanitizer) {}
+let initialized = false;
 
-  renderComponent(rcp: RenderComponentType): Renderer {
-    return this._rootRenderer.renderComponent(rcp);
+export function initServicesIfNeeded() {
+  if (initialized) {
+    return;
   }
-  sanitize(context: SecurityContext, value: string): string {
-    return this._sanitizer.sanitize(context, value);
+  initialized = true;
+  const services = isDevMode() ? createDebugServices() : createProdServices();
+  Services.setCurrentNode = services.setCurrentNode;
+  Services.createRootView = services.createRootView;
+  Services.createEmbeddedView = services.createEmbeddedView;
+  Services.checkAndUpdateView = services.checkAndUpdateView;
+  Services.checkNoChangesView = services.checkNoChangesView;
+  Services.destroyView = services.destroyView;
+  Services.attachEmbeddedView = services.attachEmbeddedView,
+  Services.detachEmbeddedView = services.detachEmbeddedView,
+  Services.moveEmbeddedView = services.moveEmbeddedView;
+  Services.resolveDep = services.resolveDep;
+  Services.createDebugContext = services.createDebugContext;
+  Services.handleEvent = services.handleEvent;
+  Services.updateView = services.updateView;
+}
+
+function createProdServices() {
+  return {
+    setCurrentNode: () => {},
+    createRootView: createProdRootView,
+    createEmbeddedView: createEmbeddedView,
+    checkAndUpdateView: checkAndUpdateView,
+    checkNoChangesView: checkNoChangesView,
+    destroyView: destroyView,
+    attachEmbeddedView: attachEmbeddedView,
+    detachEmbeddedView: detachEmbeddedView,
+    moveEmbeddedView: moveEmbeddedView,
+    resolveDep: resolveDep,
+    createDebugContext: (view: ViewData, nodeIndex: number) => new DebugContext_(view, nodeIndex),
+    handleEvent: (view: ViewData, nodeIndex: number, eventName: string, event: any) =>
+                     view.def.handleEvent(view, nodeIndex, eventName, event),
+    updateView: (check: NodeCheckFn, view: ViewData) => view.def.update(check, view)
+  };
+}
+
+function createDebugServices() {
+  return {
+    setCurrentNode: debugSetCurrentNode,
+    createRootView: debugCreateRootView,
+    createEmbeddedView: debugCreateEmbeddedView,
+    checkAndUpdateView: debugCheckAndUpdateView,
+    checkNoChangesView: debugCheckNoChangesView,
+    destroyView: debugDestroyView,
+    attachEmbeddedView: attachEmbeddedView,
+    detachEmbeddedView: detachEmbeddedView,
+    moveEmbeddedView: moveEmbeddedView,
+    resolveDep: resolveDep,
+    createDebugContext: (view: ViewData, nodeIndex: number) => new DebugContext_(view, nodeIndex),
+    handleEvent: debugHandleEvent,
+    updateView: debugUpdateView
+  };
+}
+
+function createProdRootView(
+    injector: Injector, projectableNodes: any[][], rootSelectorOrNode: string | any,
+    def: ViewDefinition, context?: any): ViewData {
+  return createRootView(
+      createRootData(injector, projectableNodes, rootSelectorOrNode), def, context);
+}
+
+function debugCreateRootView(
+    injector: Injector, projectableNodes: any[][], rootSelectorOrNode: string | any,
+    def: ViewDefinition, context?: any): ViewData {
+  const root = createRootData(injector, projectableNodes, rootSelectorOrNode);
+  const debugRoot: RootData = {
+    injector: root.injector,
+    projectableNodes: root.projectableNodes,
+    element: root.element,
+    renderer: new DebugRenderer(root.renderer),
+    sanitizer: root.sanitizer
+  };
+  return callWithDebugContext('create', createRootView, null, [debugRoot, def, context]);
+}
+
+function createRootData(
+    injector: Injector, projectableNodes: any[][], rootSelectorOrNode: any): RootData {
+  const sanitizer = injector.get(Sanitizer);
+  // TODO(tbosch): once the new renderer interface is implemented via platform-browser,
+  // just get it via the injector and drop LegacyRendererAdapter and DirectDomRenderer.
+  const renderer = isDevMode() ? new LegacyRendererAdapter(injector.get(v1renderer.RootRenderer)) :
+                                 new DirectDomRenderer();
+  const rootElement =
+      rootSelectorOrNode ? renderer.selectRootElement(rootSelectorOrNode) : undefined;
+  return {injector, projectableNodes, element: rootElement, sanitizer, renderer};
+}
+
+function debugCreateEmbeddedView(parent: ViewData, anchorDef: NodeDef, context?: any): ViewData {
+  return callWithDebugContext('create', createEmbeddedView, null, [parent, anchorDef, context]);
+}
+
+function debugCheckAndUpdateView(view: ViewData) {
+  return callWithDebugContext('detectChanges', checkAndUpdateView, null, [view]);
+}
+
+function debugCheckNoChangesView(view: ViewData) {
+  return callWithDebugContext('checkNoChanges', checkNoChangesView, null, [view]);
+}
+
+function debugDestroyView(view: ViewData) {
+  return callWithDebugContext('destroyView', destroyView, null, [view]);
+}
+
+
+let _currentAction: string;
+let _currentView: ViewData;
+let _currentNodeIndex: number;
+
+function debugSetCurrentNode(view: ViewData, nodeIndex: number) {
+  _currentView = view;
+  _currentNodeIndex = nodeIndex;
+}
+
+function debugHandleEvent(view: ViewData, nodeIndex: number, eventName: string, event: any) {
+  if (view.state & ViewState.Destroyed) {
+    throw viewDestroyedError(_currentAction);
   }
-  createViewContainerRef(data: ElementData): ViewContainerRef {
-    return new ViewContainerRef_(data);
+  debugSetCurrentNode(view, nodeIndex);
+  return callWithDebugContext(
+      'handleEvent', view.def.handleEvent, null, [view, nodeIndex, eventName, event]);
+}
+
+function debugUpdateView(check: NodeCheckFn, view: ViewData) {
+  if (view.state & ViewState.Destroyed) {
+    throw viewDestroyedError(_currentAction);
   }
-  createTemplateRef(parentView: ViewData, def: NodeDef): TemplateRef<any> {
-    return new TemplateRef_(parentView, def);
-  }
-  createDebugContext(view: ViewData, nodeIndex: number): DebugContext {
-    return new DebugContext_(view, nodeIndex);
+  debugSetCurrentNode(view, nextNodeIndexWithBinding(view, 0));
+  return view.def.update(debugCheckFn, view);
+
+  function debugCheckFn(
+      view: ViewData, nodeIndex: number, argStyle: ArgumentType, v0?: any, v1?: any, v2?: any,
+      v3?: any, v4?: any, v5?: any, v6?: any, v7?: any, v8?: any, v9?: any) {
+    const values = argStyle === ArgumentType.Dynamic ? v0 : [].slice.call(arguments, 3);
+    const nodeDef = view.def.nodes[nodeIndex];
+    for (let i = 0; i < nodeDef.bindings.length; i++) {
+      const binding = nodeDef.bindings[i];
+      const value = values[i];
+      if ((binding.type === BindingType.ElementProperty ||
+           binding.type === BindingType.ProviderProperty) &&
+          checkBinding(view, nodeDef, i, value)) {
+        const elIndex = nodeDef.type === NodeType.Provider ? nodeDef.parent : nodeDef.index;
+        setBindingDebugInfo(
+            view.root.renderer, asElementData(view, elIndex).renderElement, binding.nonMinifiedName,
+            value);
+      }
+    }
+    const result = check(view, nodeIndex, <any>argStyle, v0, v1, v2, v3, v4, v5, v6, v7, v8, v9);
+
+    debugSetCurrentNode(view, nextNodeIndexWithBinding(view, nodeIndex));
+    return result;
+  };
+}
+
+function setBindingDebugInfo(renderer: RendererV2, renderNode: any, propName: string, value: any) {
+  try {
+    renderer.setAttribute(
+        renderNode, `ng-reflect-${camelCaseToDashCase(propName)}`, value ? value.toString() : null);
+  } catch (e) {
+    renderer.setAttribute(
+        renderNode, `ng-reflect-${camelCaseToDashCase(propName)}`,
+        '[ERROR] Exception while trying to serialize the value');
   }
 }
 
-class ViewContainerRef_ implements ViewContainerRef {
-  constructor(private _data: ElementData) {}
+const CAMEL_CASE_REGEXP = /([A-Z])/g;
 
-  get element(): ElementRef { return <ElementRef>unimplemented(); }
+function camelCaseToDashCase(input: string): string {
+  return input.replace(CAMEL_CASE_REGEXP, (...m: any[]) => '-' + m[1].toLowerCase());
+}
 
-  get injector(): Injector { return <Injector>unimplemented(); }
-
-  get parentInjector(): Injector { return <Injector>unimplemented(); }
-
-  clear(): void {
-    const len = this._data.embeddedViews.length;
-    for (let i = len - 1; i >= 0; i--) {
-      const view = detachEmbeddedView(this._data, i);
-      destroyView(view);
+function nextNodeIndexWithBinding(view: ViewData, nodeIndex: number): number {
+  for (let i = nodeIndex; i < view.def.nodes.length; i++) {
+    const nodeDef = view.def.nodes[i];
+    if (nodeDef.bindings && nodeDef.bindings.length) {
+      return i;
     }
   }
-
-  get(index: number): ViewRef { return new ViewRef_(this._data.embeddedViews[index]); }
-
-  get length(): number { return this._data.embeddedViews.length; };
-
-  createEmbeddedView<C>(templateRef: TemplateRef<C>, context?: C, index?: number):
-      EmbeddedViewRef<C> {
-    const viewRef = templateRef.createEmbeddedView(context);
-    this.insert(viewRef, index);
-    return viewRef;
-  }
-
-  createComponent<C>(
-      componentFactory: ComponentFactory<C>, index?: number, injector?: Injector,
-      projectableNodes?: any[][]): ComponentRef<C> {
-    return unimplemented();
-  }
-
-  insert(viewRef: ViewRef, index?: number): ViewRef {
-    const viewData = (<ViewRef_>viewRef)._view;
-    attachEmbeddedView(this._data, index, viewData);
-    return viewRef;
-  }
-
-  move(viewRef: ViewRef, currentIndex: number): ViewRef { return unimplemented(); }
-
-  indexOf(viewRef: ViewRef): number {
-    return this._data.embeddedViews.indexOf((<ViewRef_>viewRef)._view);
-  }
-
-  remove(index?: number): void {
-    const viewData = detachEmbeddedView(this._data, index);
-    destroyView(viewData);
-  }
-
-  detach(index?: number): ViewRef {
-    const view = this.get(index);
-    detachEmbeddedView(this._data, index);
-    return view;
-  }
+  return undefined;
 }
 
-class ViewRef_ implements EmbeddedViewRef<any> {
-  /** @internal */
-  _view: ViewData;
 
-  constructor(_view: ViewData) { this._view = _view; }
-
-  get rootNodes(): any[] { return rootRenderNodes(this._view); }
-
-  get context() { return this._view.context; }
-
-  get destroyed(): boolean { return unimplemented(); }
-
-  markForCheck(): void { unimplemented(); }
-  detach(): void { unimplemented(); }
-  detectChanges(): void { checkAndUpdateView(this._view); }
-  checkNoChanges(): void { checkNoChangesView(this._view); }
-  reattach(): void { unimplemented(); }
-  onDestroy(callback: Function) { unimplemented(); }
-
-  destroy() { unimplemented(); }
-}
-
-class TemplateRef_ implements TemplateRef<any> {
-  constructor(private _parentView: ViewData, private _def: NodeDef) {}
-
-  createEmbeddedView(context: any): EmbeddedViewRef<any> {
-    return new ViewRef_(createEmbeddedView(this._parentView, this._def, context));
+class DebugRenderer implements RendererV2 {
+  constructor(private _delegate: RendererV2) {}
+  createElement(name: string): any {
+    return this._delegate.createElement(name, getCurrentDebugContext());
   }
-
-  get elementRef(): ElementRef {
-    return new ElementRef(asElementData(this._parentView, this._def.index).renderElement);
+  createComment(value: string): any {
+    return this._delegate.createComment(value, getCurrentDebugContext());
+  }
+  createText(value: string): any {
+    return this._delegate.createText(value, getCurrentDebugContext());
+  }
+  appendChild(parent: any, newChild: any): void {
+    return this._delegate.appendChild(parent, newChild);
+  }
+  insertBefore(parent: any, newChild: any, refChild: any): void {
+    return this._delegate.insertBefore(parent, newChild, refChild);
+  }
+  removeChild(parent: any, oldChild: any): void {
+    return this._delegate.removeChild(parent, oldChild);
+  }
+  selectRootElement(selectorOrNode: string|any): any {
+    return this._delegate.selectRootElement(selectorOrNode, getCurrentDebugContext());
+  }
+  parentNode(node: any): any { return this._delegate.parentNode(node); }
+  nextSibling(node: any): any { return this._delegate.nextSibling(node); }
+  setAttribute(el: any, name: string, value: string): void {
+    return this._delegate.setAttribute(el, name, value);
+  }
+  removeAttribute(el: any, name: string): void { return this._delegate.removeAttribute(el, name); }
+  addClass(el: any, name: string): void { return this._delegate.addClass(el, name); }
+  removeClass(el: any, name: string): void { return this._delegate.removeClass(el, name); }
+  setStyle(el: any, style: string, value: any): void {
+    return this._delegate.setStyle(el, style, value);
+  }
+  removeStyle(el: any, style: string): void { return this._delegate.removeStyle(el, style); }
+  setProperty(el: any, name: string, value: any): void {
+    return this._delegate.setProperty(el, name, value);
+  }
+  setText(node: any, value: string): void { return this._delegate.setText(node, value); }
+  listen(target: 'window'|'document'|any, eventName: string, callback: (event: any) => boolean):
+      () => void {
+    return this._delegate.listen(target, eventName, callback);
   }
 }
 
@@ -208,22 +328,33 @@ function findHostElement(view: ViewData): ElementData {
   return undefined;
 }
 
-function findElementDef(view: ViewData, nodeIndex: number): NodeDef {
-  const viewDef = view.def;
-  let nodeDef = viewDef.nodes[nodeIndex];
-  while (nodeDef) {
-    if (nodeDef.type === NodeType.Element) {
-      return nodeDef;
-    }
-    nodeDef = nodeDef.parent != null ? viewDef.nodes[nodeDef.parent] : undefined;
-  }
-  return undefined;
-}
-
 function collectReferences(view: ViewData, nodeDef: NodeDef, references: {[key: string]: any}) {
   for (let queryId in nodeDef.matchedQueries) {
     if (queryId.startsWith('#')) {
       references[queryId.slice(1)] = getQueryValue(view, nodeDef, queryId);
     }
   }
+}
+
+function callWithDebugContext(action: string, fn: any, self: any, args: any[]) {
+  const oldAction = _currentAction;
+  const oldView = _currentView;
+  const oldNodeIndex = _currentNodeIndex;
+  try {
+    _currentAction = action;
+    const result = fn.apply(self, args);
+    _currentView = oldView;
+    _currentNodeIndex = oldNodeIndex;
+    _currentAction = oldAction;
+    return result;
+  } catch (e) {
+    if (isViewDebugError(e) || !_currentView) {
+      throw e;
+    }
+    throw viewWrappedDebugError(e, getCurrentDebugContext());
+  }
+}
+
+function getCurrentDebugContext() {
+  return new DebugContext_(_currentView, _currentNodeIndex);
 }

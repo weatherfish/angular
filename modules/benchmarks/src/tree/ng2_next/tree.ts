@@ -7,9 +7,9 @@
  */
 
 import {NgIf} from '@angular/common';
-import {Component, NgModule, TemplateRef, ViewContainerRef, ViewEncapsulation} from '@angular/core';
-import {BindingType, DefaultServices, NodeFlags, ViewData, ViewDefinition, ViewFlags, anchorDef, asElementData, asProviderData, checkAndUpdateView, checkNodeInline, createRootView, elementDef, providerDef, setCurrentNode, textDef, viewDef} from '@angular/core/src/view/index';
-import {DomSanitizer, DomSanitizerImpl, SafeStyle} from '@angular/platform-browser/src/security/dom_sanitization_service';
+import {Component, ComponentFactory, ComponentRef, Injector, NgModule, RootRenderer, Sanitizer, TemplateRef, ViewContainerRef, ViewEncapsulation} from '@angular/core';
+import {ArgumentType, BindingType, NodeFlags, ViewData, ViewDefinition, ViewFlags, anchorDef, createComponentFactory, directiveDef, elementDef, initServicesIfNeeded, textDef, viewDef} from '@angular/core/src/view/index';
+import {DomSanitizerImpl, SafeStyle} from '@angular/platform-browser/src/security/dom_sanitization_service';
 
 import {TreeNode, emptyTree} from '../util';
 
@@ -21,12 +21,12 @@ export class TreeComponent {
   get bgColor() { return this.data.depth % 2 ? trustedEmptyColor : trustedGreyColor; }
 }
 
-let viewFlags = ViewFlags.DirectDom;
+let viewFlags = ViewFlags.None;
 
 function TreeComponent_Host(): ViewDefinition {
   return viewDef(viewFlags, [
     elementDef(NodeFlags.None, null, null, 1, 'tree'),
-    providerDef(NodeFlags.None, null, 0, TreeComponent, [], null, null, TreeComponent_0),
+    directiveDef(NodeFlags.None, null, 0, TreeComponent, [], null, null, TreeComponent_0),
   ]);
 }
 
@@ -35,26 +35,24 @@ function TreeComponent_0(): ViewDefinition {
       viewFlags,
       [
         elementDef(NodeFlags.None, null, null, 1, 'tree'),
-        providerDef(
+        directiveDef(
             NodeFlags.None, null, 0, TreeComponent, [], {data: [0, 'data']}, null, TreeComponent_0),
       ],
-      (view: ViewData) => {
+      (check, view) => {
         const cmp = view.component;
-        setCurrentNode(view, 1);
-        checkNodeInline(cmp.data.left);
+        check(view, 1, ArgumentType.Inline, cmp.data.left);
       });
 
   const TreeComponent_2: ViewDefinition = viewDef(
       viewFlags,
       [
         elementDef(NodeFlags.None, null, null, 1, 'tree'),
-        providerDef(
+        directiveDef(
             NodeFlags.None, null, 0, TreeComponent, [], {data: [0, 'data']}, null, TreeComponent_0),
       ],
-      (view: ViewData) => {
+      (check, view) => {
         const cmp = view.component;
-        setCurrentNode(view, 1);
-        checkNodeInline(cmp.data.right);
+        check(view, 1, ArgumentType.Inline, cmp.data.left);
       });
 
   return viewDef(
@@ -65,40 +63,46 @@ function TreeComponent_0(): ViewDefinition {
             [[BindingType.ElementStyle, 'backgroundColor', null]]),
         textDef(null, [' ', ' ']),
         anchorDef(NodeFlags.HasEmbeddedViews, null, null, 1, TreeComponent_1),
-        providerDef(
+        directiveDef(
             NodeFlags.None, null, 0, NgIf, [ViewContainerRef, TemplateRef], {ngIf: [0, 'ngIf']}),
         anchorDef(NodeFlags.HasEmbeddedViews, null, null, 1, TreeComponent_2),
-        providerDef(
+        directiveDef(
             NodeFlags.None, null, 0, NgIf, [ViewContainerRef, TemplateRef], {ngIf: [0, 'ngIf']}),
       ],
-      (view: ViewData) => {
+      (check, view) => {
         const cmp = view.component;
-        setCurrentNode(view, 0);
-        checkNodeInline(cmp.bgColor);
-        setCurrentNode(view, 1);
-        checkNodeInline(cmp.data.value);
-        setCurrentNode(view, 3);
-        checkNodeInline(cmp.data.left != null);
-        setCurrentNode(view, 5);
-        checkNodeInline(cmp.data.right != null);
+        check(view, 0, ArgumentType.Inline, cmp.bgColor);
+        check(view, 1, ArgumentType.Inline, cmp.data.value);
+        check(view, 3, ArgumentType.Inline, cmp.data.left != null);
+        check(view, 5, ArgumentType.Inline, cmp.data.right != null);
       });
 }
 
-export class AppModule {
-  public rootComp: TreeComponent;
-  public rootEl: any;
-  private rootView: ViewData;
-  private sanitizer: DomSanitizer;
+export class AppModule implements Injector {
+  private sanitizer: DomSanitizerImpl;
+  private componentFactory: ComponentFactory<TreeComponent>;
+  componentRef: ComponentRef<TreeComponent>;
 
   constructor() {
+    initServicesIfNeeded();
     this.sanitizer = new DomSanitizerImpl();
     trustedEmptyColor = this.sanitizer.bypassSecurityTrustStyle('');
     trustedGreyColor = this.sanitizer.bypassSecurityTrustStyle('grey');
+    this.componentFactory = createComponentFactory('#root', TreeComponent, TreeComponent_Host);
   }
+
+  get(token: any, notFoundValue: any = Injector.THROW_IF_NOT_FOUND): any {
+    switch (token) {
+      case Sanitizer:
+        return this.sanitizer;
+      case RootRenderer:
+        return null;
+    }
+    return Injector.NULL.get(token, notFoundValue);
+  }
+
   bootstrap() {
-    this.rootView = createRootView(new DefaultServices(null, this.sanitizer), TreeComponent_Host);
-    this.rootComp = asProviderData(this.rootView, 1).instance;
-    this.rootEl = asElementData(this.rootView, 0).renderElement;
+    this.componentRef = this.componentFactory.create(this, [], this.componentFactory.selector);
   }
-  tick() { checkAndUpdateView(this.rootView); }
+  tick() { this.componentRef.changeDetectorRef.detectChanges(); }
 }
