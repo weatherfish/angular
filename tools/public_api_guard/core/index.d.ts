@@ -69,6 +69,7 @@ export declare abstract class AnimationPlayer {
     abstract getPosition(): number;
     abstract hasStarted(): boolean;
     abstract init(): void;
+    abstract onDestroy(fn: () => void): void;
     abstract onDone(fn: () => void): void;
     abstract onStart(fn: () => void): void;
     abstract pause(): void;
@@ -171,6 +172,7 @@ export declare class ApplicationModule {
 export declare abstract class ApplicationRef {
     readonly abstract componentTypes: Type<any>[];
     readonly abstract components: ComponentRef<any>[];
+    readonly abstract isStable: Observable<boolean>;
     readonly abstract viewCount: number;
     abstract attachView(view: ViewRef): void;
     abstract bootstrap<C>(componentFactory: ComponentFactory<C> | Type<C>): ComponentRef<C>;
@@ -209,11 +211,12 @@ export declare abstract class ChangeDetectorRef {
 export declare function Class(clsDef: ClassDefinition): Type<any>;
 
 /** @stable */
-export interface ClassDefinition {
-    constructor: Function | any[];
+export declare type ClassDefinition = {
     extends?: Type<any>;
+    constructor: Function | any[];
+} & {
     [x: string]: Type<any> | Function | any[];
-}
+};
 
 /** @stable */
 export interface ClassProvider {
@@ -346,6 +349,7 @@ export declare class DebugElement extends DebugNode {
     };
     constructor(nativeNode: any, parent: any, _debugInfo: RenderDebugInfo);
     addChild(child: DebugNode): void;
+    insertBefore(refChild: DebugNode, newChild: DebugNode): void;
     insertChildrenAfter(child: DebugNode, newChildren: DebugNode[]): void;
     query(predicate: Predicate<DebugElement>): DebugElement;
     queryAll(predicate: Predicate<DebugElement>): DebugElement[];
@@ -555,7 +559,8 @@ export interface IterableDiffer<V> {
 
 /** @stable */
 export interface IterableDifferFactory {
-    create<V>(cdRef: ChangeDetectorRef, trackByFn?: TrackByFunction<V>): IterableDiffer<V>;
+    create<V>(trackByFn?: TrackByFunction<V>): IterableDiffer<V>;
+    /** @deprecated */ create<V>(_cdr?: ChangeDetectorRef | TrackByFunction<V>, trackByFn?: TrackByFunction<V>): IterableDiffer<V>;
     supports(objects: any): boolean;
 }
 
@@ -597,7 +602,8 @@ export interface KeyValueDiffer<K, V> {
 
 /** @stable */
 export interface KeyValueDifferFactory {
-    create<K, V>(cdRef: ChangeDetectorRef): KeyValueDiffer<K, V>;
+    create<K, V>(): KeyValueDiffer<K, V>;
+    /** @deprecated */ create<K, V>(_cdr?: ChangeDetectorRef): KeyValueDiffer<K, V>;
     supports(objects: any): boolean;
 }
 
@@ -842,6 +848,45 @@ export declare abstract class Renderer {
 }
 
 /** @experimental */
+export declare abstract class RendererFactoryV2 {
+    abstract createRenderer(hostElement: any, type: RendererTypeV2): RendererV2;
+}
+
+/** @experimental */
+export interface RendererTypeV2 {
+    data: {
+        [kind: string]: any[];
+    };
+    encapsulation: ViewEncapsulation;
+    id: string;
+    styles: (string | any[])[];
+}
+
+/** @experimental */
+export declare abstract class RendererV2 {
+    destroyNode: (node: any) => void | null;
+    abstract addClass(el: any, name: string): void;
+    abstract appendChild(parent: any, newChild: any): void;
+    abstract createComment(value: string): any;
+    abstract createElement(name: string, namespace?: string): any;
+    abstract createText(value: string): any;
+    abstract destroy(): void;
+    abstract insertBefore(parent: any, newChild: any, refChild: any): void;
+    abstract listen(target: 'window' | 'document' | 'body' | any, eventName: string, callback: (event: any) => boolean): () => void;
+    abstract nextSibling(node: any): any;
+    abstract parentNode(node: any): any;
+    abstract removeAttribute(el: any, name: string, namespace?: string): void;
+    abstract removeChild(parent: any, oldChild: any): void;
+    abstract removeClass(el: any, name: string): void;
+    abstract removeStyle(el: any, style: string, hasVendorPrefix: boolean): void;
+    abstract selectRootElement(selectorOrNode: string | any): any;
+    abstract setAttribute(el: any, name: string, value: string, namespace?: string): void;
+    abstract setProperty(el: any, name: string, value: any): void;
+    abstract setStyle(el: any, style: string, value: any, hasVendorPrefix: boolean, hasImportant: boolean): void;
+    abstract setValue(node: any, value: string): void;
+}
+
+/** @experimental */
 export declare class ResolvedReflectiveFactory {
     dependencies: ReflectiveDependency[];
     factory: Function;
@@ -987,6 +1032,15 @@ export interface TrackByFunction<T> {
 export declare function transition(stateChangeExpr: string | ((fromState: string, toState: string) => boolean), steps: AnimationMetadata | AnimationMetadata[]): AnimationStateTransitionMetadata;
 
 /** @experimental */
+export interface TransitionFactory {
+    match(currentState: any, nextState: any): TransitionInstruction;
+}
+
+/** @experimental */
+export interface TransitionInstruction {
+}
+
+/** @experimental */
 export declare const TRANSLATIONS: InjectionToken<string>;
 
 /** @experimental */
@@ -994,6 +1048,12 @@ export declare const TRANSLATIONS_FORMAT: InjectionToken<string>;
 
 /** @experimental */
 export declare function trigger(name: string, animation: AnimationMetadata[]): AnimationEntryMetadata;
+
+/** @experimental */
+export interface Trigger {
+    name: string;
+    transitionFactories: TransitionFactory[];
+}
 
 /** @stable */
 export declare const Type: FunctionConstructor;

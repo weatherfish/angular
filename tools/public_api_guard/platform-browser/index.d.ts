@@ -60,7 +60,7 @@ export declare class HammerGestureConfig {
 
 /** @experimental */
 export declare class Meta {
-    constructor(_dom: DomAdapter);
+    constructor(_doc: any);
     addTag(tag: MetaDefinition, forceCreation?: boolean): HTMLMetaElement;
     addTags(tags: MetaDefinition[], forceCreation?: boolean): HTMLMetaElement[];
     getTag(attrSelector: string): HTMLMetaElement;
@@ -71,7 +71,7 @@ export declare class Meta {
 }
 
 /** @experimental */
-export interface MetaDefinition {
+export declare type MetaDefinition = {
     charset?: string;
     content?: string;
     httpEquiv?: string;
@@ -81,8 +81,9 @@ export interface MetaDefinition {
     property?: string;
     scheme?: string;
     url?: string;
+} & {
     [prop: string]: string;
-}
+};
 
 /** @deprecated */
 export declare class NgProbeToken {
@@ -116,6 +117,7 @@ export interface SafeUrl extends SafeValue {
 
 /** @experimental */
 export declare class Title {
+    constructor(_doc: any);
     getTitle(): string;
     setTitle(newTitle: string): void;
 }

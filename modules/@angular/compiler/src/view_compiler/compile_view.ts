@@ -7,8 +7,8 @@
  */
 
 import {AnimationEntryCompileResult} from '../animation/animation_compiler';
-import {CompileDirectiveMetadata, CompilePipeSummary, tokenName, viewClassName} from '../compile_metadata';
-import {EventHandlerVars, NameResolver} from '../compiler_util/expression_converter';
+import {CompileDirectiveMetadata, CompilePipeSummary, rendererTypeName, tokenName, viewClassName} from '../compile_metadata';
+import {EventHandlerVars, LegacyNameResolver} from '../compiler_util/expression_converter';
 import {CompilerConfig} from '../config';
 import {isPresent} from '../facade/lang';
 import * as o from '../output/output_ast';
@@ -33,7 +33,7 @@ export class CompileViewRootNode {
       public ngContentIndex?: number) {}
 }
 
-export class CompileView implements NameResolver {
+export class CompileView implements LegacyNameResolver {
   public viewType: ViewType;
   public viewQueries: Map<any, CompileQuery[]>;
 
@@ -70,6 +70,7 @@ export class CompileView implements NameResolver {
   public pipes: CompilePipe[] = [];
   public locals = new Map<string, o.Expression>();
   public className: string;
+  public rendererTypeName: string;
   public classType: o.Type;
   public classExpr: o.ReadVarExpr;
 
@@ -102,6 +103,7 @@ export class CompileView implements NameResolver {
 
     this.viewType = getViewType(component, viewIndex);
     this.className = viewClassName(component.type.reference, viewIndex);
+    this.rendererTypeName = rendererTypeName(component.type.reference);
     this.classType = o.expressionType(o.variable(this.className));
     this.classExpr = o.variable(this.className);
     if (this.viewType === ViewType.COMPONENT || this.viewType === ViewType.HOST) {

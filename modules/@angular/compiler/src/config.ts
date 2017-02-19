@@ -6,10 +6,19 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {MissingTranslationStrategy, ViewEncapsulation, isDevMode} from '@angular/core';
+import {InjectionToken, MissingTranslationStrategy, ViewEncapsulation, isDevMode} from '@angular/core';
 
 import {CompileIdentifierMetadata} from './compile_metadata';
 import {Identifiers, createIdentifier} from './identifiers';
+
+
+/**
+ * Temporal switch for the compiler to use the new view engine,
+ * until it is fully integrated.
+ *
+ * Only works in Jit for now.
+ */
+export const USE_VIEW_ENGINE = new InjectionToken<boolean>('UseViewEngine');
 
 export class CompilerConfig {
   public renderTypes: RenderTypes;
@@ -17,17 +26,19 @@ export class CompilerConfig {
   private _genDebugInfo: boolean;
   private _logBindingUpdate: boolean;
   public useJit: boolean;
+  public useViewEngine: boolean;
   public missingTranslation: MissingTranslationStrategy;
 
   constructor(
       {renderTypes = new DefaultRenderTypes(), defaultEncapsulation = ViewEncapsulation.Emulated,
-       genDebugInfo, logBindingUpdate, useJit = true, missingTranslation}: {
+       genDebugInfo, logBindingUpdate, useJit = true, missingTranslation, useViewEngine}: {
         renderTypes?: RenderTypes,
         defaultEncapsulation?: ViewEncapsulation,
         genDebugInfo?: boolean,
         logBindingUpdate?: boolean,
         useJit?: boolean,
         missingTranslation?: MissingTranslationStrategy,
+        useViewEngine?: boolean
       } = {}) {
     this.renderTypes = renderTypes;
     this.defaultEncapsulation = defaultEncapsulation;
@@ -35,6 +46,7 @@ export class CompilerConfig {
     this._logBindingUpdate = logBindingUpdate;
     this.useJit = useJit;
     this.missingTranslation = missingTranslation;
+    this.useViewEngine = useViewEngine;
   }
 
   get genDebugInfo(): boolean {

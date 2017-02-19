@@ -70,7 +70,8 @@ export function main() {
             if (pipes === null) {
               pipes = [];
             }
-            return parser.parse(component, template, directives, pipes, schemas, 'TestComp');
+            return parser.parse(component, template, directives, pipes, schemas, 'TestComp')
+                .template;
           };
     }));
   }
@@ -92,14 +93,14 @@ export function main() {
           new class extends NullVisitor{
             visitEmbeddedTemplate(ast: EmbeddedTemplateAst, context: any) { return ast; }
           },
-          new EmbeddedTemplateAst([], [], [], [], [], [], false, [], 0, null));
+          new EmbeddedTemplateAst([], [], [], [], [], [], false, [], [], 0, null));
     });
 
     it('should visit ElementAst', () => {
       expectVisitedNode(
           new class extends
           NullVisitor{visitElement(ast: ElementAst, context: any) { return ast; }},
-          new ElementAst('foo', [], [], [], [], [], [], false, [], 0, null, null));
+          new ElementAst('foo', [], [], [], [], [], [], false, [], [], 0, null, null));
     });
 
     it('should visit RefererenceAst', () => {
@@ -154,7 +155,7 @@ export function main() {
       expectVisitedNode(
           new class extends
           NullVisitor{visitDirective(ast: DirectiveAst, context: any): any{return ast;}},
-          new DirectiveAst(null, [], [], [], null));
+          new DirectiveAst(null, [], [], [], 0, null));
     });
 
     it('should visit DirectiveAst', () => {
@@ -171,13 +172,13 @@ export function main() {
       };
       const nodes: TemplateAst[] = [
         new NgContentAst(0, 0, null),
-        new EmbeddedTemplateAst([], [], [], [], [], [], false, [], 0, null),
-        new ElementAst('foo', [], [], [], [], [], [], false, [], 0, null, null),
+        new EmbeddedTemplateAst([], [], [], [], [], [], false, [], [], 0, null),
+        new ElementAst('foo', [], [], [], [], [], [], false, [], [], 0, null, null),
         new ReferenceAst('foo', null, null), new VariableAst('foo', 'bar', null),
         new BoundEventAst('foo', 'bar', 'goo', null, null),
         new BoundElementPropertyAst('foo', null, null, false, null, 'bar', null),
         new AttrAst('foo', 'bar', null), new BoundTextAst(null, 0, null),
-        new TextAst('foo', 0, null), new DirectiveAst(null, [], [], [], null),
+        new TextAst('foo', 0, null), new DirectiveAst(null, [], [], [], 0, null),
         new BoundDirectivePropertyAst('foo', 'bar', null, null)
       ];
       const result = templateVisitAll(visitor, nodes, null);
@@ -306,10 +307,10 @@ export function main() {
              isComponent: true,
              template: new CompileTemplateMetadata({interpolation: ['{%', '%}']})
            });
-           expect(humanizeTplAst(parser.parse(component, '{%a%}', [], [], [], 'TestComp'), {
-             start: '{%',
-             end: '%}'
-           })).toEqual([[BoundTextAst, '{% a %}']]);
+           expect(humanizeTplAst(
+                      parser.parse(component, '{%a%}', [], [], [], 'TestComp').template,
+                      {start: '{%', end: '%}'}))
+               .toEqual([[BoundTextAst, '{% a %}']]);
          }));
 
       describe('bound properties', () => {
@@ -376,22 +377,32 @@ export function main() {
                 .toThrowError(`Template parse errors:
 Can't bind to 'invalidProp' since it isn't a known property of 'my-component'.
 1. If 'my-component' is an Angular component and it has 'invalidProp' input, then verify that it is part of this module.
-2. If 'my-component' is a Web Component then add "CUSTOM_ELEMENTS_SCHEMA" to the '@NgModule.schemas' of this component to suppress this message.
- ("<my-component [ERROR ->][invalidProp]="bar"></my-component>"): TestComp@0:14`);
+2. If 'my-component' is a Web Component then add 'CUSTOM_ELEMENTS_SCHEMA' to the '@NgModule.schemas' of this component to suppress this message.
+3. To allow any property add 'NO_ERRORS_SCHEMA' to the '@NgModule.schemas' of this component. ("<my-component [ERROR ->][invalidProp]="bar"></my-component>"): TestComp@0:14`);
+          });
+
+          it('should throw error when binding to an unknown property of ng-container', () => {
+            expect(() => parse('<ng-container [invalidProp]="bar"></ng-container>', []))
+                .toThrowError(
+                    `Template parse errors:
+Can't bind to 'invalidProp' since it isn't a known property of 'ng-container'.
+1. If 'invalidProp' is an Angular directive, then add 'CommonModule' to the '@NgModule.imports' of this component.
+2. To allow any property add 'NO_ERRORS_SCHEMA' to the '@NgModule.schemas' of this component.` +
+                    ` ("<ng-container [ERROR ->][invalidProp]="bar"></ng-container>"): TestComp@0:14`);
           });
 
           it('should throw error when binding to an unknown element w/o bindings', () => {
             expect(() => parse('<unknown></unknown>', [])).toThrowError(`Template parse errors:
 'unknown' is not a known element:
 1. If 'unknown' is an Angular component, then verify that it is part of this module.
-2. If 'unknown' is a Web Component then add "CUSTOM_ELEMENTS_SCHEMA" to the '@NgModule.schemas' of this component to suppress this message. ("[ERROR ->]<unknown></unknown>"): TestComp@0:0`);
+2. To allow any element add 'NO_ERRORS_SCHEMA' to the '@NgModule.schemas' of this component. ("[ERROR ->]<unknown></unknown>"): TestComp@0:0`);
           });
 
           it('should throw error when binding to an unknown custom element w/o bindings', () => {
             expect(() => parse('<un-known></un-known>', [])).toThrowError(`Template parse errors:
 'un-known' is not a known element:
 1. If 'un-known' is an Angular component, then verify that it is part of this module.
-2. If 'un-known' is a Web Component then add "CUSTOM_ELEMENTS_SCHEMA" to the '@NgModule.schemas' of this component to suppress this message. ("[ERROR ->]<un-known></un-known>"): TestComp@0:0`);
+2. If 'un-known' is a Web Component then add 'CUSTOM_ELEMENTS_SCHEMA' to the '@NgModule.schemas' of this component to suppress this message. ("[ERROR ->]<un-known></un-known>"): TestComp@0:0`);
           });
 
           it('should throw error when binding to an invalid property', () => {
@@ -2088,7 +2099,7 @@ class FooAstTransformer extends ThrowingVisitor {
   visitElement(ast: ElementAst, context: any): any {
     if (ast.name != 'div') return ast;
     return new ElementAst(
-        'foo', [], [], [], [], [], [], false, [], ast.ngContentIndex, ast.sourceSpan,
+        'foo', [], [], [], [], [], [], false, [], [], ast.ngContentIndex, ast.sourceSpan,
         ast.endSourceSpan);
   }
 }
@@ -2097,7 +2108,7 @@ class BarAstTransformer extends FooAstTransformer {
   visitElement(ast: ElementAst, context: any): any {
     if (ast.name != 'foo') return ast;
     return new ElementAst(
-        'bar', [], [], [], [], [], [], false, [], ast.ngContentIndex, ast.sourceSpan,
+        'bar', [], [], [], [], [], [], false, [], [], ast.ngContentIndex, ast.sourceSpan,
         ast.endSourceSpan);
   }
 }

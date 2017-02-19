@@ -13,7 +13,7 @@ module.exports = (gulp) => () => {
         }
 
         let someCommitsInvalid = false;
-        let commitsByLine = stdout.trim().split(/\n/);
+        let commitsByLine = stdout.trim().split(/\n/).filter(line => line != '');
 
         console.log(`Examining ${commitsByLine.length} commits between HEAD and master`);
 

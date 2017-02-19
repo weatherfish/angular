@@ -24,7 +24,7 @@ export {ComponentFactoryDependency, ComponentViewDependency, DirectiveWrapperDep
 
 export class ViewCompileResult {
   constructor(
-      public statements: o.Statement[], public viewClassVar: string,
+      public statements: o.Statement[], public viewClassVar: string, public rendererTypeVar: string,
       public dependencies:
           Array<ComponentViewDependency|ComponentFactoryDependency|DirectiveWrapperDependency>) {}
 }
@@ -50,6 +50,7 @@ export class ViewCompiler {
     bindView(view, template, this._schemaRegistry);
     finishView(view, statements);
 
-    return new ViewCompileResult(statements, view.classExpr.name, dependencies);
+    return new ViewCompileResult(
+        statements, view.classExpr.name, view.rendererTypeName, dependencies);
   }
 }

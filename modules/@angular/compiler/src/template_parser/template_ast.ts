@@ -126,9 +126,9 @@ export class ElementAst implements TemplateAst {
       public name: string, public attrs: AttrAst[], public inputs: BoundElementPropertyAst[],
       public outputs: BoundEventAst[], public references: ReferenceAst[],
       public directives: DirectiveAst[], public providers: ProviderAst[],
-      public hasViewContainer: boolean, public children: TemplateAst[],
-      public ngContentIndex: number, public sourceSpan: ParseSourceSpan,
-      public endSourceSpan: ParseSourceSpan) {}
+      public hasViewContainer: boolean, public queryMatches: QueryMatch[],
+      public children: TemplateAst[], public ngContentIndex: number,
+      public sourceSpan: ParseSourceSpan, public endSourceSpan: ParseSourceSpan) {}
 
   visit(visitor: TemplateAstVisitor, context: any): any {
     return visitor.visitElement(this, context);
@@ -143,8 +143,8 @@ export class EmbeddedTemplateAst implements TemplateAst {
       public attrs: AttrAst[], public outputs: BoundEventAst[], public references: ReferenceAst[],
       public variables: VariableAst[], public directives: DirectiveAst[],
       public providers: ProviderAst[], public hasViewContainer: boolean,
-      public children: TemplateAst[], public ngContentIndex: number,
-      public sourceSpan: ParseSourceSpan) {}
+      public queryMatches: QueryMatch[], public children: TemplateAst[],
+      public ngContentIndex: number, public sourceSpan: ParseSourceSpan) {}
 
   visit(visitor: TemplateAstVisitor, context: any): any {
     return visitor.visitEmbeddedTemplate(this, context);
@@ -170,7 +170,7 @@ export class DirectiveAst implements TemplateAst {
   constructor(
       public directive: CompileDirectiveSummary, public inputs: BoundDirectivePropertyAst[],
       public hostProperties: BoundElementPropertyAst[], public hostEvents: BoundEventAst[],
-      public sourceSpan: ParseSourceSpan) {}
+      public contentQueryStartId: number, public sourceSpan: ParseSourceSpan) {}
   visit(visitor: TemplateAstVisitor, context: any): any {
     return visitor.visitDirective(this, context);
   }
@@ -239,6 +239,11 @@ export enum PropertyBindingType {
    * A binding to an animation reference (e.g. `[animate.key]="expression"`).
    */
   Animation
+}
+
+export interface QueryMatch {
+  queryId: number;
+  value: CompileTokenMetadata;
 }
 
 /**

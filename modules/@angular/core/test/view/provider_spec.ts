@@ -6,9 +6,9 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {AfterContentChecked, AfterContentInit, AfterViewChecked, AfterViewInit, ChangeDetectorRef, DoCheck, ElementRef, EventEmitter, Injector, OnChanges, OnDestroy, OnInit, RenderComponentType, Renderer, RootRenderer, Sanitizer, SecurityContext, SimpleChange, TemplateRef, ViewContainerRef, ViewEncapsulation, WrappedValue, getDebugNode} from '@angular/core';
+import {AfterContentChecked, AfterContentInit, AfterViewChecked, AfterViewInit, ChangeDetectorRef, DoCheck, ElementRef, EventEmitter, Injector, OnChanges, OnDestroy, OnInit, RenderComponentType, Renderer, RendererV2, RootRenderer, Sanitizer, SecurityContext, SimpleChange, TemplateRef, ViewContainerRef, ViewEncapsulation, WrappedValue, getDebugNode} from '@angular/core';
 import {getDebugContext} from '@angular/core/src/errors';
-import {ArgumentType, BindingType, DebugContext, DepFlags, NodeDef, NodeFlags, ProviderType, RootData, Services, ViewData, ViewDefinition, ViewFlags, ViewHandleEventFn, ViewUpdateFn, anchorDef, asElementData, asProviderData, directiveDef, elementDef, providerDef, rootRenderNodes, textDef, viewDef} from '@angular/core/src/view/index';
+import {ArgumentType, BindingType, DebugContext, DepFlags, NodeDef, NodeFlags, ProviderType, RootData, Services, ViewData, ViewDefinition, ViewDefinitionFactory, ViewFlags, ViewHandleEventFn, ViewUpdateFn, anchorDef, asElementData, asProviderData, directiveDef, elementDef, providerDef, rootRenderNodes, textDef, viewDef} from '@angular/core/src/view/index';
 import {TestBed, inject, withModule} from '@angular/core/testing';
 import {getDOM} from '@angular/platform-browser/src/dom/dom_adapter';
 
@@ -17,14 +17,13 @@ import {ARG_TYPE_VALUES, checkNodeInlineOrDynamic, createRootView, isBrowser} fr
 export function main() {
   describe(`View Providers`, () => {
     function compViewDef(
-        nodes: NodeDef[], update?: ViewUpdateFn, handleEvent?: ViewHandleEventFn,
-        viewFlags: ViewFlags = ViewFlags.None): ViewDefinition {
-      return viewDef(
-          viewFlags, nodes, update, handleEvent, 'someCompId', ViewEncapsulation.None, []);
+        nodes: NodeDef[], updateDirectives?: ViewUpdateFn, updateRenderer?: ViewUpdateFn,
+        handleEvent?: ViewHandleEventFn, viewFlags: ViewFlags = ViewFlags.None): ViewDefinition {
+      return viewDef(viewFlags, nodes, updateDirectives, updateRenderer, handleEvent);
     }
 
-    function embeddedViewDef(nodes: NodeDef[], update?: ViewUpdateFn): ViewDefinition {
-      return viewDef(ViewFlags.None, nodes, update);
+    function embeddedViewDef(nodes: NodeDef[], update?: ViewUpdateFn): ViewDefinitionFactory {
+      return () => viewDef(ViewFlags.None, nodes, update);
     }
 
     function createAndGetRootNodes(viewDef: ViewDefinition): {rootNodes: any[], view: ViewData} {
@@ -59,7 +58,8 @@ export function main() {
 
         createAndGetRootNodes(compViewDef([
           elementDef(NodeFlags.None, null, null, 2, 'span'),
-          directiveDef(NodeFlags.LazyProvider, null, 0, LazyService, []),
+          providerDef(
+              NodeFlags.LazyProvider, null, ProviderType.Class, LazyService, LazyService, []),
           directiveDef(NodeFlags.None, null, 0, SomeService, [Injector])
         ]));
 
@@ -290,11 +290,25 @@ export function main() {
           it('should inject RendererV1', () => {
             createAndGetRootNodes(compViewDef([
               elementDef(NodeFlags.None, null, null, 1, 'span'),
-              directiveDef(NodeFlags.None, null, 0, SomeService, [Renderer])
+              directiveDef(
+                  NodeFlags.None, null, 0, SomeService, [Renderer], null, null,
+                  () => compViewDef([anchorDef(NodeFlags.None, null, null, 0)]))
             ]));
 
             expect(instance.dep.createElement).toBeTruthy();
           });
+
+          it('should inject RendererV2', () => {
+            createAndGetRootNodes(compViewDef([
+              elementDef(NodeFlags.None, null, null, 1, 'span'),
+              directiveDef(
+                  NodeFlags.None, null, 0, SomeService, [RendererV2], null, null,
+                  () => compViewDef([anchorDef(NodeFlags.None, null, null, 0)]))
+            ]));
+
+            expect(instance.dep.createElement).toBeTruthy();
+          });
+
         });
 
       });
@@ -330,37 +344,6 @@ export function main() {
           expect(getDOM().getAttribute(el, 'ng-reflect-a')).toBe('v1');
         });
 
-        it(`should unwrap values with ${ArgumentType[inlineDynamic]}`, () => {
-          let bindingValue: any;
-          let setterSpy = jasmine.createSpy('set');
-
-          class SomeService {
-            set a(value: any) { setterSpy(value); }
-          }
-
-          const {view, rootNodes} = createAndGetRootNodes(compViewDef(
-              [
-                elementDef(NodeFlags.None, null, null, 1, 'span'),
-                directiveDef(NodeFlags.None, null, 0, SomeService, [], {a: [0, 'a']})
-              ],
-              (check, view) => {
-                checkNodeInlineOrDynamic(check, view, 1, inlineDynamic, [bindingValue]);
-              }));
-
-          bindingValue = 'v1';
-          Services.checkAndUpdateView(view);
-          expect(setterSpy).toHaveBeenCalledWith('v1');
-
-          setterSpy.calls.reset();
-          Services.checkAndUpdateView(view);
-          expect(setterSpy).not.toHaveBeenCalled();
-
-          setterSpy.calls.reset();
-          bindingValue = WrappedValue.wrap('v1');
-          Services.checkAndUpdateView(view);
-          expect(setterSpy).toHaveBeenCalledWith('v1');
-
-        });
       });
     });
 
@@ -388,7 +371,7 @@ export function main() {
               directiveDef(
                   NodeFlags.None, null, 0, SomeService, [], null, {emitter: 'someEventName'})
             ],
-            null, handleEvent));
+            null, null, handleEvent));
 
         emitter.emit('someEventInstance');
         expect(handleEvent).toHaveBeenCalledWith(view, 0, 'someEventName', 'someEventInstance');
@@ -410,7 +393,7 @@ export function main() {
               directiveDef(
                   NodeFlags.None, null, 0, SomeService, [], null, {emitter: 'someEventName'})
             ],
-            null, () => { throw new Error('Test'); }));
+            null, null, () => { throw new Error('Test'); }));
 
         let err: any;
         try {

@@ -8,13 +8,13 @@
 
 export {anchorDef, elementDef} from './element';
 export {ngContentDef} from './ng_content';
-export {directiveDef, providerDef} from './provider';
+export {directiveDef, pipeDef, providerDef} from './provider';
 export {pureArrayDef, pureObjectDef, purePipeDef} from './pure_expression';
 export {queryDef} from './query';
-export {createComponentFactory} from './refs';
+export {ViewRef_, createComponentFactory, nodeValue} from './refs';
 export {initServicesIfNeeded} from './services';
 export {textDef} from './text';
-export {rootRenderNodes} from './util';
+export {createRendererTypeV2, elementEventFullName, rootRenderNodes, unwrapValue} from './util';
 export {viewDef} from './view';
 export {attachEmbeddedView, detachEmbeddedView, moveEmbeddedView} from './view_attach';
 

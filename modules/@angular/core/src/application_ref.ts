@@ -6,9 +6,16 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
+import {Observable} from 'rxjs/Observable';
+import {Observer} from 'rxjs/Observer';
+import {Subject} from 'rxjs/Subject';
+import {Subscription} from 'rxjs/Subscription';
+import {merge} from 'rxjs/observable/merge';
+import {share} from 'rxjs/operator/share';
+
 import {ErrorHandler} from '../src/error_handler';
 import {ListWrapper} from '../src/facade/collection';
-import {stringify} from '../src/facade/lang';
+import {scheduleMicroTask, stringify} from '../src/facade/lang';
 import {isPromise} from '../src/util/lang';
 
 import {ApplicationInitStatus} from './application_init';
@@ -29,6 +36,8 @@ import {NgZone} from './zone/ng_zone';
 let _devMode: boolean = true;
 let _runModeLocked: boolean = false;
 let _platform: PlatformRef;
+
+export const ALLOW_MULTIPLE_PLATFORMS = new InjectionToken<boolean>('AllowMultipleToken');
 
 /**
  * Disable Angular's development mode, which turns off assertions and other
@@ -76,7 +85,8 @@ export class NgProbeToken {
  * @experimental APIs related to application bootstrap are currently under review.
  */
 export function createPlatform(injector: Injector): PlatformRef {
-  if (_platform && !_platform.destroyed) {
+  if (_platform && !_platform.destroyed &&
+      !_platform.injector.get(ALLOW_MULTIPLE_PLATFORMS, false)) {
     throw new Error(
         'There can be only one platform. Destroy the previous one to create a new one.');
   }
@@ -96,7 +106,8 @@ export function createPlatformFactory(
     providers: Provider[] = []): (extraProviders?: Provider[]) => PlatformRef {
   const marker = new InjectionToken(`Platform: ${name}`);
   return (extraProviders: Provider[] = []) => {
-    if (!getPlatform()) {
+    let platform = getPlatform();
+    if (!platform || platform.injector.get(ALLOW_MULTIPLE_PLATFORMS, false)) {
       if (parentPlatformFactory) {
         parentPlatformFactory(
             providers.concat(extraProviders).concat({provide: marker, useValue: true}));
@@ -110,8 +121,7 @@ export function createPlatformFactory(
 }
 
 /**
- * Checks that there currently is a platform
- * which contains the given token as a provider.
+ * Checks that there currently is a platform which contains the given token as a provider.
  *
  * @experimental APIs related to application bootstrap are currently under review.
  */
@@ -395,6 +405,11 @@ export abstract class ApplicationRef {
    * Returns the number of attached views.
    */
   abstract get viewCount(): number;
+
+  /**
+   * Returns an Observable that indicates when the application is stable or unstable.
+   */
+  abstract get isStable(): Observable<boolean>;
 }
 
 /**
@@ -412,6 +427,8 @@ export class ApplicationRef_ extends ApplicationRef {
   private _views: AppView<any>[] = [];
   private _runningTick: boolean = false;
   private _enforceNoNewChanges: boolean = false;
+  private _isStable: Observable<boolean>;
+  private _stable = true;
 
   constructor(
       private _zone: NgZone, private _console: Console, private _injector: Injector,
@@ -425,6 +442,46 @@ export class ApplicationRef_ extends ApplicationRef {
 
     this._zone.onMicrotaskEmpty.subscribe(
         {next: () => { this._zone.run(() => { this.tick(); }); }});
+
+    const isCurrentlyStable = new Observable<boolean>((observer: Observer<boolean>) => {
+      this._stable = this._zone.isStable && !this._zone.hasPendingMacrotasks &&
+          !this._zone.hasPendingMicrotasks;
+      this._zone.runOutsideAngular(() => {
+        observer.next(this._stable);
+        observer.complete();
+      });
+    });
+
+    const isStable = new Observable<boolean>((observer: Observer<boolean>) => {
+      const stableSub: Subscription = this._zone.onStable.subscribe(() => {
+        NgZone.assertNotInAngularZone();
+
+        // Check whether there are no pending macro/micro tasks in the next tick
+        // to allow for NgZone to update the state.
+        scheduleMicroTask(() => {
+          if (!this._stable && !this._zone.hasPendingMacrotasks &&
+              !this._zone.hasPendingMicrotasks) {
+            this._stable = true;
+            observer.next(true);
+          }
+        });
+      });
+
+      const unstableSub: Subscription = this._zone.onUnstable.subscribe(() => {
+        NgZone.assertInAngularZone();
+        if (this._stable) {
+          this._stable = false;
+          this._zone.runOutsideAngular(() => { observer.next(false); });
+        }
+      });
+
+      return () => {
+        stableSub.unsubscribe();
+        unstableSub.unsubscribe();
+      };
+    });
+
+    this._isStable = merge(isCurrentlyStable, share.call(isStable));
   }
 
   attachView(viewRef: ViewRef): void {
@@ -510,4 +567,6 @@ export class ApplicationRef_ extends ApplicationRef {
   get componentTypes(): Type<any>[] { return this._rootComponentTypes; }
 
   get components(): ComponentRef<any>[] { return this._rootComponents; }
+
+  get isStable(): Observable<boolean> { return this._isStable; }
 }

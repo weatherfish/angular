@@ -102,11 +102,11 @@ function generateHandleEventMethod(
   });
   boundEvents.forEach((renderEvent, renderEventIdx) => {
     const evalResult = convertActionBinding(
-        compileElement.view, compileElement.view, compileElement.view.componentContext,
-        renderEvent.handler, `sub_${renderEventIdx}`);
+        compileElement.view, compileElement.view.componentContext, renderEvent.handler,
+        `sub_${renderEventIdx}`);
     const trueStmts = evalResult.stmts;
-    if (evalResult.preventDefault) {
-      trueStmts.push(resultVar.set(evalResult.preventDefault.and(resultVar)).toStmt());
+    if (evalResult.allowDefault) {
+      trueStmts.push(resultVar.set(evalResult.allowDefault.and(resultVar)).toStmt());
     }
     // TODO(tbosch): convert this into a `switch` once our OutputAst supports it.
     handleEventStmts.push(

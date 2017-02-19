@@ -5,7 +5,9 @@ export declare const APP_BASE_HREF: InjectionToken<string>;
 export declare class AsyncPipe implements OnDestroy, PipeTransform {
     constructor(_ref: ChangeDetectorRef);
     ngOnDestroy(): void;
-    transform(obj: Observable<any> | Promise<any> | EventEmitter<any>): any;
+    transform<T>(obj: EventEmitter<T>): T | null;
+    transform<T>(obj: Promise<T>): T | null;
+    transform<T>(obj: Observable<T>): T | null;
 }
 
 /** @stable */
@@ -28,6 +30,10 @@ export declare class DatePipe implements PipeTransform {
 export declare class DecimalPipe implements PipeTransform {
     constructor(_locale: string);
     transform(value: any, digits?: string): string;
+}
+
+/** @deprecated */
+export declare class DeprecatedCommonModule {
 }
 
 /** @stable */
@@ -137,7 +143,7 @@ export declare class NgForOf<T> implements DoCheck, OnChanges {
     ngForOf: NgIterable<T>;
     ngForTemplate: TemplateRef<NgForOfRow<T>>;
     ngForTrackBy: TrackByFunction<T>;
-    constructor(_viewContainer: ViewContainerRef, _template: TemplateRef<NgForOfRow<T>>, _differs: IterableDiffers, _cdr: ChangeDetectorRef);
+    constructor(_viewContainer: ViewContainerRef, _template: TemplateRef<NgForOfRow<T>>, _differs: IterableDiffers);
     ngDoCheck(): void;
     ngOnChanges(changes: SimpleChanges): void;
 }

@@ -7,8 +7,7 @@
  */
 
 import {Injector, RenderComponentType, RootRenderer, Sanitizer, SecurityContext, TemplateRef, ViewContainerRef, ViewEncapsulation, getDebugNode} from '@angular/core';
-import {DebugContext, NodeDef, NodeFlags, RootData, Services, ViewData, ViewDefinition, ViewFlags, ViewHandleEventFn, ViewUpdateFn, anchorDef, asElementData, asProviderData, asTextData, attachEmbeddedView, detachEmbeddedView, directiveDef, elementDef, ngContentDef, rootRenderNodes, textDef, viewDef} from '@angular/core/src/view/index';
-import {inject} from '@angular/core/testing';
+import {DebugContext, NodeDef, NodeFlags, RootData, Services, ViewData, ViewDefinition, ViewDefinitionFactory, ViewFlags, ViewHandleEventFn, ViewUpdateFn, anchorDef, asElementData, asProviderData, asTextData, attachEmbeddedView, detachEmbeddedView, directiveDef, elementDef, ngContentDef, rootRenderNodes, textDef, viewDef} from '@angular/core/src/view/index';
 import {getDOM} from '@angular/platform-browser/src/dom/dom_adapter';
 
 import {createRootView, isBrowser} from './helper';
@@ -16,13 +15,13 @@ import {createRootView, isBrowser} from './helper';
 export function main() {
   describe(`View NgContent`, () => {
     function compViewDef(
-        nodes: NodeDef[], update?: ViewUpdateFn, handleEvent?: ViewHandleEventFn,
-        viewFlags: ViewFlags = ViewFlags.None): ViewDefinition {
-      return viewDef(viewFlags, nodes, update, handleEvent);
+        nodes: NodeDef[], updateDirectives?: ViewUpdateFn, updateRenderer?: ViewUpdateFn,
+        handleEvent?: ViewHandleEventFn, viewFlags: ViewFlags = ViewFlags.None): ViewDefinition {
+      return viewDef(viewFlags, nodes, updateDirectives, updateRenderer, handleEvent);
     }
 
-    function embeddedViewDef(nodes: NodeDef[], update?: ViewUpdateFn): ViewDefinition {
-      return viewDef(ViewFlags.None, nodes, update);
+    function embeddedViewDef(nodes: NodeDef[], update?: ViewUpdateFn): ViewDefinitionFactory {
+      return () => viewDef(ViewFlags.None, nodes, update);
     }
 
     function hostElDef(contentNodes: NodeDef[], viewNodes: NodeDef[]): NodeDef[] {
@@ -104,14 +103,18 @@ export function main() {
     it('should include projected nodes when attaching / detaching embedded views', () => {
       const {view, rootNodes} = createAndGetRootNodes(compViewDef(hostElDef([textDef(0, ['a'])], [
         elementDef(NodeFlags.None, null, null, 1, 'div'),
-        anchorDef(NodeFlags.HasEmbeddedViews, null, 0, 0, embeddedViewDef([ngContentDef(null, 0)])),
+        anchorDef(NodeFlags.HasEmbeddedViews, null, 0, 0, embeddedViewDef([
+                    ngContentDef(null, 0),
+                    // The anchor would be added by the compiler after the ngContent
+                    anchorDef(NodeFlags.None, null, null, 0),
+                  ])),
       ])));
 
       const componentView = asProviderData(view, 1).componentView;
       const view0 = Services.createEmbeddedView(componentView, componentView.def.nodes[1]);
 
       attachEmbeddedView(asElementData(componentView, 1), 0, view0);
-      expect(getDOM().childNodes(getDOM().firstChild(rootNodes[0])).length).toBe(2);
+      expect(getDOM().childNodes(getDOM().firstChild(rootNodes[0])).length).toBe(3);
       expect(getDOM().childNodes(getDOM().firstChild(rootNodes[0]))[1])
           .toBe(asTextData(view, 2).renderText);
 

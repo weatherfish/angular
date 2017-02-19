@@ -14,10 +14,11 @@ import {looseIdentical, stringify} from '../facade/lang';
 import {TemplateRef} from '../linker/template_ref';
 import {ViewContainerRef} from '../linker/view_container_ref';
 import {ViewRef} from '../linker/view_ref';
-import {Renderer} from '../render/api';
+import {ViewEncapsulation} from '../metadata/view';
+import {Renderer, RendererTypeV2} from '../render/api';
 
 import {expressionChangedAfterItHasBeenCheckedError, isViewDebugError, viewDestroyedError, viewWrappedDebugError} from './errors';
-import {DebugContext, ElementData, NodeData, NodeDef, NodeFlags, NodeType, Services, ViewData, ViewDefinition, ViewDefinitionFactory, ViewFlags, ViewState, asElementData, asProviderData, asTextData} from './types';
+import {DebugContext, ElementData, NodeData, NodeDef, NodeFlags, NodeType, QueryValueType, Services, ViewData, ViewDefinition, ViewDefinitionFactory, ViewFlags, ViewState, asElementData, asProviderData, asTextData} from './types';
 
 const _tokenKeyCache = new Map<any, string>();
 
@@ -30,16 +31,45 @@ export function tokenKey(token: any): string {
   return key;
 }
 
+let unwrapCounter = 0;
+
+export function unwrapValue(value: any): any {
+  if (value instanceof WrappedValue) {
+    value = value.wrapped;
+    unwrapCounter++;
+  }
+  return value;
+}
+
+let _renderCompCount = 0;
+
+export function createRendererTypeV2(values: {
+  styles: (string | any[])[],
+  encapsulation: ViewEncapsulation,
+  data: {[kind: string]: any[]}
+}): RendererTypeV2 {
+  const isFilled = values && (values.encapsulation !== ViewEncapsulation.None ||
+                              values.styles.length || Object.keys(values.data).length);
+  if (isFilled) {
+    const id = `c${_renderCompCount++}`;
+    return {id: id, styles: values.styles, encapsulation: values.encapsulation, data: values.data};
+  } else {
+    return null;
+  }
+}
+
 export function checkBinding(
     view: ViewData, def: NodeDef, bindingIdx: number, value: any): boolean {
   const oldValue = view.oldValues[def.bindingIndex + bindingIdx];
-  return !!(view.state & ViewState.FirstCheck) || !devModeEqual(oldValue, value);
+  return unwrapCounter > 0 || !!(view.state & ViewState.FirstCheck) ||
+      !devModeEqual(oldValue, value);
 }
 
 export function checkBindingNoChanges(
     view: ViewData, def: NodeDef, bindingIdx: number, value: any) {
   const oldValue = view.oldValues[def.bindingIndex + bindingIdx];
-  if ((view.state & ViewState.FirstCheck) || !devModeEqual(oldValue, value)) {
+  if (unwrapCounter || (view.state & ViewState.FirstCheck) || !devModeEqual(oldValue, value)) {
+    unwrapCounter = 0;
     throw expressionChangedAfterItHasBeenCheckedError(
         Services.createDebugContext(view, def.index), oldValue, value,
         (view.state & ViewState.FirstCheck) !== 0);
@@ -49,15 +79,10 @@ export function checkBindingNoChanges(
 export function checkAndUpdateBinding(
     view: ViewData, def: NodeDef, bindingIdx: number, value: any): boolean {
   const oldValues = view.oldValues;
-  if ((view.state & ViewState.FirstCheck) ||
+  if (unwrapCounter || (view.state & ViewState.FirstCheck) ||
       !looseIdentical(oldValues[def.bindingIndex + bindingIdx], value)) {
+    unwrapCounter = 0;
     oldValues[def.bindingIndex + bindingIdx] = value;
-    if (def.flags & NodeFlags.HasComponent) {
-      const compView = asProviderData(view, def.index).componentView;
-      if (compView.def.flags & ViewFlags.OnPush) {
-        compView.state |= ViewState.ChecksEnabled;
-      }
-    }
     return true;
   }
   return false;
@@ -75,45 +100,26 @@ export function dispatchEvent(
   return Services.handleEvent(view, nodeIndex, eventName, event);
 }
 
-export function unwrapValue(value: any): any {
-  if (value instanceof WrappedValue) {
-    value = value.wrapped;
-  }
-  return value;
-}
-
 export function declaredViewContainer(view: ViewData): ElementData {
   if (view.parent) {
     const parentView = view.parent;
-    return asElementData(parentView, view.parentIndex);
+    return asElementData(parentView, view.parentNodeDef.index);
   }
   return undefined;
 }
 
 /**
- * for component views, this is the same as parentIndex.
+ * for component views, this is the host element.
  * for embedded views, this is the index of the parent node
  * that contains the view container.
  */
-export function parentDiIndex(view: ViewData): number {
-  if (view.parent) {
-    const parentNodeDef = view.def.nodes[view.parentIndex];
-    return parentNodeDef.element && parentNodeDef.element.template ? parentNodeDef.parent :
-                                                                     parentNodeDef.index;
+export function viewParentEl(view: ViewData): NodeDef {
+  const parentView = view.parent;
+  if (parentView) {
+    return view.parentNodeDef.parent;
+  } else {
+    return null;
   }
-  return view.parentIndex;
-}
-
-export function findElementDef(view: ViewData, nodeIndex: number): NodeDef {
-  const viewDef = view.def;
-  let nodeDef = viewDef.nodes[nodeIndex];
-  while (nodeDef) {
-    if (nodeDef.type === NodeType.Element) {
-      return nodeDef;
-    }
-    nodeDef = nodeDef.parent != null ? viewDef.nodes[nodeDef.parent] : undefined;
-  }
-  return undefined;
 }
 
 export function renderNode(view: ViewData, def: NodeDef): any {
@@ -125,8 +131,58 @@ export function renderNode(view: ViewData, def: NodeDef): any {
   }
 }
 
+export function elementEventFullName(target: string, name: string): string {
+  return target ? `${target}:${name}` : name;
+}
+
 export function isComponentView(view: ViewData): boolean {
   return view.component === view.context && !!view.parent;
+}
+
+export function isEmbeddedView(view: ViewData): boolean {
+  return view.component !== view.context && !!view.parent;
+}
+
+export function filterQueryId(queryId: number): number {
+  return 1 << (queryId % 32);
+}
+
+export function splitMatchedQueriesDsl(matchedQueriesDsl: [string | number, QueryValueType][]): {
+  matchedQueries: {[queryId: string]: QueryValueType},
+  references: {[refId: string]: QueryValueType},
+  matchedQueryIds: number
+} {
+  const matchedQueries: {[queryId: string]: QueryValueType} = {};
+  let matchedQueryIds = 0;
+  const references: {[refId: string]: QueryValueType} = {};
+  if (matchedQueriesDsl) {
+    matchedQueriesDsl.forEach(([queryId, valueType]) => {
+      if (typeof queryId === 'number') {
+        matchedQueries[queryId] = valueType;
+        matchedQueryIds |= filterQueryId(queryId);
+      } else {
+        references[queryId] = valueType;
+      }
+    });
+  }
+  return {matchedQueries, references, matchedQueryIds};
+}
+
+export function getParentRenderElement(view: ViewData, renderHost: any, def: NodeDef): any {
+  let renderParent = def.renderParent;
+  if (renderParent) {
+    const parent = def.parent;
+    if (parent && (parent.type !== NodeType.Element || !parent.element.component ||
+                   (parent.element.component.provider.rendererType &&
+                    parent.element.component.provider.rendererType.encapsulation ===
+                        ViewEncapsulation.Native))) {
+      // only children of non components, or children of components with native encapsulation should
+      // be attached.
+      return asElementData(view, def.renderParent.index).renderElement;
+    }
+  } else {
+    return renderHost;
+  }
 }
 
 const VIEW_DEFINITION_CACHE = new WeakMap<any, ViewDefinition>();
@@ -172,10 +228,23 @@ export enum RenderNodeAction {
 
 export function visitRootRenderNodes(
     view: ViewData, action: RenderNodeAction, parentNode: any, nextSibling: any, target: any[]) {
-  const len = view.def.nodes.length;
-  for (let i = 0; i < len; i++) {
+  // We need to re-compute the parent node in case the nodes have been moved around manually
+  if (action === RenderNodeAction.RemoveChild) {
+    parentNode = view.renderer.parentNode(renderNode(view, view.def.lastRootNode));
+  }
+  visitSiblingRenderNodes(
+      view, action, 0, view.def.nodes.length - 1, parentNode, nextSibling, target);
+}
+
+export function visitSiblingRenderNodes(
+    view: ViewData, action: RenderNodeAction, startIndex: number, endIndex: number, parentNode: any,
+    nextSibling: any, target: any[]) {
+  for (let i = startIndex; i <= endIndex; i++) {
     const nodeDef = view.def.nodes[i];
-    visitRenderNode(view, nodeDef, action, parentNode, nextSibling, target);
+    if (nodeDef.type === NodeType.Element || nodeDef.type === NodeType.Text ||
+        nodeDef.type === NodeType.NgContent) {
+      visitRenderNode(view, nodeDef, action, parentNode, nextSibling, target);
+    }
     // jump to next sibling
     i += nodeDef.childCount;
   }
@@ -189,7 +258,7 @@ export function visitProjectedRenderNodes(
     compView = compView.parent;
   }
   const hostView = compView.parent;
-  const hostElDef = hostView.def.nodes[compView.parentIndex];
+  const hostElDef = viewParentEl(compView);
   const startIndex = hostElDef.index + 1;
   const endIndex = hostElDef.index + hostElDef.childCount;
   for (let i = startIndex; i <= endIndex; i++) {
@@ -228,13 +297,18 @@ function visitRenderNode(
         }
       }
     }
+    if (nodeDef.type === NodeType.Element && !nodeDef.element.name) {
+      visitSiblingRenderNodes(
+          view, action, nodeDef.index + 1, nodeDef.index + nodeDef.childCount, parentNode,
+          nextSibling, target);
+    }
   }
 }
 
 function execRenderNodeAction(
     view: ViewData, renderNode: any, action: RenderNodeAction, parentNode: any, nextSibling: any,
     target: any[]) {
-  const renderer = view.root.renderer;
+  const renderer = view.renderer;
   switch (action) {
     case RenderNodeAction.AppendChild:
       renderer.appendChild(parentNode, renderNode);
@@ -249,4 +323,14 @@ function execRenderNodeAction(
       target.push(renderNode);
       break;
   }
+}
+
+const NS_PREFIX_RE = /^:([^:]+):(.+)$/;
+
+export function splitNamespace(name: string): string[] {
+  if (name[0] === ':') {
+    const match = name.match(NS_PREFIX_RE);
+    return [match[1], match[2]];
+  }
+  return ['', name];
 }

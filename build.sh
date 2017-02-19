@@ -10,10 +10,11 @@ PACKAGES=(core
   forms
   platform-browser
   platform-browser-dynamic
+  http
   platform-server
   platform-webworker
   platform-webworker-dynamic
-  http
+  animation
   upgrade
   router
   compiler-cli

@@ -7,4 +7,4 @@
  */
 
 // Public API for render
-export {RenderComponentType, Renderer, RootRenderer} from './render/api';
+export {RenderComponentType, Renderer, RendererFactoryV2, RendererTypeV2, RendererV2, RootRenderer} from './render/api';
