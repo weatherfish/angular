@@ -6,8 +6,7 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {Inject, InjectionToken, Optional, SchemaMetadata} from '@angular/core';
-
+import {Inject, InjectionToken, Optional, SchemaMetadata, ɵConsole as Console} from '@angular/core';
 import {CompileDirectiveMetadata, CompileDirectiveSummary, CompilePipeSummary, CompileTemplateSummary, CompileTokenMetadata, CompileTypeMetadata, identifierName} from '../compile_metadata';
 import {CompilerConfig} from '../config';
 import {AST, ASTWithSource, EmptyExpr} from '../expression_parser/ast';
@@ -22,44 +21,43 @@ import {expandNodes} from '../ml_parser/icu_ast_expander';
 import {InterpolationConfig} from '../ml_parser/interpolation_config';
 import {splitNsName} from '../ml_parser/tags';
 import {ParseError, ParseErrorLevel, ParseSourceSpan} from '../parse_util';
-import {Console} from '../private_import_core';
 import {ProviderElementContext, ProviderViewContext} from '../provider_analyzer';
 import {ElementSchemaRegistry} from '../schema/element_schema_registry';
 import {CssSelector, SelectorMatcher} from '../selector';
 import {isStyleUrlResolvable} from '../style_url_resolver';
 import {syntaxError} from '../util';
-
 import {BindingParser, BoundProperty} from './binding_parser';
 import {AttrAst, BoundDirectivePropertyAst, BoundElementPropertyAst, BoundEventAst, BoundTextAst, DirectiveAst, ElementAst, EmbeddedTemplateAst, NgContentAst, PropertyBindingType, ReferenceAst, TemplateAst, TemplateAstVisitor, TextAst, VariableAst, templateVisitAll} from './template_ast';
 import {PreparsedElementType, preparseElement} from './template_preparser';
 
-
-
-// Group 1 = "bind-"
-// Group 2 = "let-"
-// Group 3 = "ref-/#"
-// Group 4 = "on-"
-// Group 5 = "bindon-"
-// Group 6 = "@"
-// Group 7 = the identifier after "bind-", "let-", "ref-/#", "on-", "bindon-" or "@"
-// Group 8 = identifier inside [()]
-// Group 9 = identifier inside []
-// Group 10 = identifier inside ()
 const BIND_NAME_REGEXP =
     /^(?:(?:(?:(bind-)|(let-)|(ref-|#)|(on-)|(bindon-)|(@))(.+))|\[\(([^\)]+)\)\]|\[([^\]]+)\]|\(([^\)]+)\))$/;
 
+// Group 1 = "bind-"
 const KW_BIND_IDX = 1;
+// Group 2 = "let-"
 const KW_LET_IDX = 2;
+// Group 3 = "ref-/#"
 const KW_REF_IDX = 3;
+// Group 4 = "on-"
 const KW_ON_IDX = 4;
+// Group 5 = "bindon-"
 const KW_BINDON_IDX = 5;
+// Group 6 = "@"
 const KW_AT_IDX = 6;
+// Group 7 = the identifier after "bind-", "let-", "ref-/#", "on-", "bindon-" or "@"
 const IDENT_KW_IDX = 7;
+// Group 8 = identifier inside [()]
 const IDENT_BANANA_BOX_IDX = 8;
+// Group 9 = identifier inside []
 const IDENT_PROPERTY_IDX = 9;
+// Group 10 = identifier inside ()
 const IDENT_EVENT_IDX = 10;
 
+const NG_TEMPLATE_ELEMENT = 'ng-template';
+// deprecated in 4.x
 const TEMPLATE_ELEMENT = 'template';
+// deprecated in 4.x
 const TEMPLATE_ATTR = 'template';
 const TEMPLATE_ATTR_PREFIX = '*';
 const CLASS_ATTR = 'class';
@@ -234,11 +232,8 @@ class TemplateParseVisitor implements html.Visitor {
   visitText(text: html.Text, parent: ElementContext): any {
     const ngContentIndex = parent.findNgContentIndex(TEXT_CSS_SELECTOR);
     const expr = this._bindingParser.parseInterpolation(text.value, text.sourceSpan);
-    if (expr) {
-      return new BoundTextAst(expr, ngContentIndex, text.sourceSpan);
-    } else {
-      return new TextAst(text.value, ngContentIndex, text.sourceSpan);
-    }
+    return expr ? new BoundTextAst(expr, ngContentIndex, text.sourceSpan) :
+                  new TextAst(text.value, ngContentIndex, text.sourceSpan);
   }
 
   visitAttribute(attribute: html.Attribute, context: any): any {
@@ -277,8 +272,9 @@ class TemplateParseVisitor implements html.Visitor {
 
     let hasInlineTemplates = false;
     const attrs: AttrAst[] = [];
-    const lcElName = splitNsName(nodeName.toLowerCase())[1];
-    const isTemplateElement = lcElName == TEMPLATE_ELEMENT;
+    const isTemplateElement = isTemplate(
+        element, this.config.enableLegacyTemplate,
+        (m: string, span: ParseSourceSpan) => this._reportError(m, span, ParseErrorLevel.WARNING));
 
     element.attrs.forEach(attr => {
       const hasBinding = this._parseAttr(
@@ -289,7 +285,10 @@ class TemplateParseVisitor implements html.Visitor {
       let prefixToken: string|undefined;
       let normalizedName = this._normalizeAttributeName(attr.name);
 
-      if (normalizedName == TEMPLATE_ATTR) {
+      if (this.config.enableLegacyTemplate && normalizedName == TEMPLATE_ATTR) {
+        this._reportError(
+            `The template attribute is deprecated. Use an ng-template element instead.`,
+            attr.sourceSpan, ParseErrorLevel.WARNING);
         templateBindingsSource = attr.value;
       } else if (normalizedName.startsWith(TEMPLATE_ATTR_PREFIX)) {
         templateBindingsSource = attr.value;
@@ -373,24 +372,13 @@ class TemplateParseVisitor implements html.Visitor {
           providerContext.transformedDirectiveAsts, providerContext.transformProviders,
           providerContext.transformedHasViewContainer, providerContext.queryMatches, children,
           hasInlineTemplates ? null : ngContentIndex, element.sourceSpan, element.endSourceSpan);
-
-      this._findComponentDirectives(directiveAsts)
-          .forEach(
-              componentDirectiveAst => this._validateElementAnimationInputOutputs(
-                  componentDirectiveAst.hostProperties, componentDirectiveAst.hostEvents,
-                  componentDirectiveAst.directive.template));
-
-      const componentTemplate = providerContext.viewContext.component.template;
-      this._validateElementAnimationInputOutputs(
-          elementProps, events, componentTemplate.toSummary());
     }
 
     if (hasInlineTemplates) {
       const templateQueryStartIndex = this.contentQueryStartId;
-      const templateCssSelector =
-          createElementCssSelector(TEMPLATE_ELEMENT, templateMatchableAttrs);
+      const templateSelector = createElementCssSelector(TEMPLATE_ELEMENT, templateMatchableAttrs);
       const {directives: templateDirectiveMetas} =
-          this._parseDirectives(this.selectorMatcher, templateCssSelector);
+          this._parseDirectives(this.selectorMatcher, templateSelector);
       const templateBoundDirectivePropNames = new Set<string>();
       const templateDirectiveAsts = this._createDirectiveAsts(
           true, element.name, templateDirectiveMetas, templateElementOrDirectiveProps, [],
@@ -412,32 +400,6 @@ class TemplateParseVisitor implements html.Visitor {
     }
 
     return parsedElement;
-  }
-
-  private _validateElementAnimationInputOutputs(
-      inputs: BoundElementPropertyAst[], outputs: BoundEventAst[],
-      template: CompileTemplateSummary) {
-    const triggerLookup = new Set<string>();
-    template.animations.forEach(entry => { triggerLookup.add(entry); });
-
-    const animationInputs = inputs.filter(input => input.isAnimation);
-    animationInputs.forEach(input => {
-      const name = input.name;
-      if (!triggerLookup.has(name)) {
-        this._reportError(`Couldn't find an animation entry for "${name}"`, input.sourceSpan);
-      }
-    });
-
-    outputs.forEach(output => {
-      if (output.isAnimation) {
-        const found = animationInputs.find(input => input.name == output.name);
-        if (!found) {
-          this._reportError(
-              `Unable to listen on (@${output.name}.${output.phase}) because the animation trigger [@${output.name}] isn't being used on the same element`,
-              output.sourceSpan);
-        }
-      }
-    });
   }
 
   private _parseAttr(
@@ -578,8 +540,8 @@ class TemplateParseVisitor implements html.Visitor {
         component = directive;
       }
       const directiveProperties: BoundDirectivePropertyAst[] = [];
-      let hostProperties = this._bindingParser.createDirectiveHostPropertyAsts(
-          directive, this.config.useViewEngine ? elementName : directive.selector, sourceSpan);
+      let hostProperties =
+          this._bindingParser.createDirectiveHostPropertyAsts(directive, elementName, sourceSpan);
       // Note: We need to check the host properties here as well,
       // as we don't know the element name in the DirectiveWrapperCompiler yet.
       hostProperties = this._checkPropertiesInSchema(elementName, hostProperties);
@@ -901,4 +863,23 @@ function isEmptyExpression(ast: AST): boolean {
     ast = ast.ast;
   }
   return ast instanceof EmptyExpr;
+}
+
+// `template` is deprecated in 4.x
+function isTemplate(
+    el: html.Element, enableLegacyTemplate: boolean,
+    reportDeprecation: (m: string, span: ParseSourceSpan) => void): boolean {
+  const tagNoNs = splitNsName(el.name)[1];
+  // `<ng-template>` is an angular construct and is lower case
+  if (tagNoNs === NG_TEMPLATE_ELEMENT) return true;
+  // `<template>` is HTML and case insensitive
+  if (tagNoNs.toLowerCase() === TEMPLATE_ELEMENT) {
+    if (enableLegacyTemplate && tagNoNs.toLowerCase() === TEMPLATE_ELEMENT) {
+      reportDeprecation(
+          `The <template> element is deprecated. Use <ng-template> instead`, el.sourceSpan);
+      return true;
+    }
+
+    return false;
+  }
 }

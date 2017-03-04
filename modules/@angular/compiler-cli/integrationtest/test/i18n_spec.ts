@@ -42,7 +42,7 @@ const EXPECTED_XMB = `<?xml version="1.0" encoding="UTF-8" ?>
 
 const EXPECTED_XLIFF = `<?xml version="1.0" encoding="UTF-8" ?>
 <xliff version="1.2" xmlns="urn:oasis:names:tc:xliff:document:1.2">
-  <file source-language="en" datatype="plaintext" original="ng2.template">
+  <file source-language="fr" datatype="plaintext" original="ng2.template">
     <body>
       <trans-unit id="76e1eccb1b772fa9f294ef9c146ea6d0efa8a2d4" datatype="html">
         <source>translate me</source>
@@ -68,7 +68,7 @@ describe('template i18n extraction output', () => {
   const genDir = 'out';
 
   it('should extract i18n messages as xmb', () => {
-    const xmbOutput = path.join(outDir, 'messages.xmb');
+    const xmbOutput = path.join(outDir, 'custom_file.xmb');
     expect(fs.existsSync(xmbOutput)).toBeTruthy();
     const xmb = fs.readFileSync(xmbOutput, {encoding: 'utf-8'});
     expect(xmb).toEqual(EXPECTED_XMB);

@@ -6,13 +6,10 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {MissingTranslationStrategy, ViewEncapsulation} from '@angular/core';
-
-import {AnimationParser} from '../animation/animation_parser';
+import {MissingTranslationStrategy, ViewEncapsulation, ɵConsole as Console} from '@angular/core';
 import {CompilerConfig} from '../config';
 import {DirectiveNormalizer} from '../directive_normalizer';
 import {DirectiveResolver} from '../directive_resolver';
-import {DirectiveWrapperCompiler} from '../directive_wrapper_compiler';
 import {Lexer} from '../expression_parser/lexer';
 import {Parser} from '../expression_parser/parser';
 import {I18NHtmlParser} from '../i18n/i18n_html_parser';
@@ -22,7 +19,6 @@ import {NgModuleCompiler} from '../ng_module_compiler';
 import {NgModuleResolver} from '../ng_module_resolver';
 import {TypeScriptEmitter} from '../output/ts_emitter';
 import {PipeResolver} from '../pipe_resolver';
-import {Console} from '../private_import_core';
 import {DomElementSchemaRegistry} from '../schema/dom_element_schema_registry';
 import {StyleCompiler} from '../style_compiler';
 import {TemplateParser} from '../template_parser/template_parser';
@@ -61,7 +57,8 @@ export function createAotCompiler(compilerHost: AotCompilerHost, options: AotCom
     genDebugInfo: options.debug === true,
     defaultEncapsulation: ViewEncapsulation.Emulated,
     logBindingUpdate: false,
-    useJit: false
+    useJit: false,
+    enableLegacyTemplate: options.enableLegacyTemplate !== false,
   });
   const normalizer = new DirectiveNormalizer(
       {get: (url: string) => compilerHost.loadResource(url)}, urlResolver, htmlParser, config);
@@ -80,12 +77,10 @@ export function createAotCompiler(compilerHost: AotCompilerHost, options: AotCom
                               compilerHost.fileNameToModuleName(fileName, containingFilePath),
     getTypeArity: (symbol: StaticSymbol) => symbolResolver.getTypeArity(symbol)
   };
+  const viewCompiler = new ViewCompiler(config, elementSchemaRegistry);
   const compiler = new AotCompiler(
-      compilerHost, resolver, tmplParser, new StyleCompiler(urlResolver),
-      new ViewCompiler(config, elementSchemaRegistry),
-      new DirectiveWrapperCompiler(config, expressionParser, elementSchemaRegistry, console),
+      config, compilerHost, resolver, tmplParser, new StyleCompiler(urlResolver), viewCompiler,
       new NgModuleCompiler(), new TypeScriptEmitter(importResolver), summaryResolver,
-      options.locale, options.i18nFormat, new AnimationParser(elementSchemaRegistry),
-      symbolResolver);
+      options.locale, options.i18nFormat, symbolResolver);
   return {compiler, reflector: staticReflector};
 }

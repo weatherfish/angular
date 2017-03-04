@@ -6,8 +6,8 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {CommonModule} from '@angular/common';
-import {Component} from '@angular/core';
+import {CommonModule, NgFor, NgForOf} from '@angular/common';
+import {Component, Directive} from '@angular/core';
 import {ComponentFixture, TestBed, async} from '@angular/core/testing';
 import {By} from '@angular/platform-browser/src/dom/debug/by';
 import {expect} from '@angular/platform-browser/testing/matchers';
@@ -29,7 +29,7 @@ export function main() {
 
     beforeEach(() => {
       TestBed.configureTestingModule({
-        declarations: [TestComponent],
+        declarations: [TestComponent, TestDirective],
         imports: [CommonModule],
       });
     });
@@ -243,7 +243,7 @@ export function main() {
     it('should allow to use a custom template', async(() => {
          const template =
              '<ng-container *ngFor="let item of items; template: tpl"></ng-container>' +
-             '<template let-item let-i="index" #tpl><p>{{i}}: {{item}};</p></template>';
+             '<ng-template let-item let-i="index" #tpl><p>{{i}}: {{item}};</p></ng-template>';
          fixture = createTestComponent(template);
          getComponent().items = ['a', 'b', 'c'];
          fixture.detectChanges();
@@ -262,7 +262,7 @@ export function main() {
     it('should use a custom template when both default and a custom one are present', async(() => {
          const template =
              '<ng-container *ngFor="let item of items; template: tpl">{{i}};</ng-container>' +
-             '<template let-item let-i="index" #tpl>{{i}}: {{item}};</template>';
+             '<ng-template let-item let-i="index" #tpl>{{i}}: {{item}};</ng-template>';
          fixture = createTestComponent(template);
          getComponent().items = ['a', 'b', 'c'];
          fixture.detectChanges();
@@ -350,6 +350,14 @@ export function main() {
            getComponent().items = ['e', 'f', 'h'];
            detectChangesAndExpectText('efh');
          }));
+
+      it('should support injecting `NgFor` and get an instance of `NgForOf`', async(() => {
+           const template = `<ng-template ngFor [ngForOf]='items' let-item test></ng-template>`;
+           fixture = createTestComponent(template);
+           const testDirective = fixture.debugElement.childNodes[0].injector.get(TestDirective);
+           const ngForOf = fixture.debugElement.childNodes[0].injector.get(NgForOf);
+           expect(testDirective.ngFor).toBe(ngForOf);
+         }));
     });
   });
 }
@@ -365,6 +373,11 @@ class TestComponent {
   trackById(index: number, item: any): string { return item['id']; }
   trackByIndex(index: number, item: any): number { return index; }
   trackByContext(): void { thisArg = this; }
+}
+
+@Directive({selector: '[test]'})
+class TestDirective {
+  constructor(public ngFor: NgFor) {}
 }
 
 const TEMPLATE = '<div><span *ngFor="let item of items">{{item.toString()}};</span></div>';

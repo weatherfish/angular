@@ -5,6 +5,7 @@
  * Use of this source code is governed by an MIT-style license that can be
  * found in the LICENSE file at https://angular.io/license
  */
+import {CompilerConfig} from '@angular/compiler';
 import {CompileAnimationEntryMetadata, CompileDiDependencyMetadata, CompileDirectiveMetadata, CompileDirectiveSummary, CompilePipeMetadata, CompilePipeSummary, CompileProviderMetadata, CompileTemplateMetadata, CompileTokenMetadata, CompileTypeMetadata, tokenReference} from '@angular/compiler/src/compile_metadata';
 import {DomElementSchemaRegistry} from '@angular/compiler/src/schema/dom_element_schema_registry';
 import {ElementSchemaRegistry} from '@angular/compiler/src/schema/element_schema_registry';
@@ -44,8 +45,13 @@ export function main() {
   function commonBeforeEach() {
     beforeEach(() => {
       console = new ArrayConsole();
-      TestBed.configureCompiler({providers: [{provide: Console, useValue: console}]});
+      TestBed.configureCompiler({
+        providers: [
+          {provide: Console, useValue: console},
+        ],
+      });
     });
+
     beforeEach(inject([TemplateParser], (parser: TemplateParser) => {
       const someAnimation = new CompileAnimationEntryMetadata('someAnimation', []);
       const someTemplate = new CompileTemplateMetadata({animations: [someAnimation]});
@@ -129,7 +135,7 @@ export function main() {
           new class extends NullVisitor{
             visitElementProperty(ast: BoundElementPropertyAst, context: any): any{return ast;}
           },
-          new BoundElementPropertyAst('foo', null, null, false, null, 'bar', null));
+          new BoundElementPropertyAst('foo', null, null, null, 'bar', null));
     });
 
     it('should visit AttrAst', () => {
@@ -176,7 +182,7 @@ export function main() {
         new ElementAst('foo', [], [], [], [], [], [], false, [], [], 0, null, null),
         new ReferenceAst('foo', null, null), new VariableAst('foo', 'bar', null),
         new BoundEventAst('foo', 'bar', 'goo', null, null),
-        new BoundElementPropertyAst('foo', null, null, false, null, 'bar', null),
+        new BoundElementPropertyAst('foo', null, null, null, 'bar', null),
         new AttrAst('foo', 'bar', null), new BoundTextAst(null, 0, null),
         new TextAst('foo', 0, null), new DirectiveAst(null, [], [], [], 0, null),
         new BoundDirectivePropertyAst('foo', 'bar', null, null)
@@ -563,12 +569,19 @@ Binding to attribute 'onEvent' is disallowed for security reasons ("<my-componen
              const dirA =
                  CompileDirectiveMetadata
                      .create({
-                       selector: 'template',
+                       selector: 'template,ng-template',
                        outputs: ['e'],
                        type: createTypeMeta({reference: {filePath: someModuleUrl, name: 'DirA'}})
                      })
                      .toSummary();
+
              expect(humanizeTplAst(parse('<template (e)="f"></template>', [dirA]))).toEqual([
+               [EmbeddedTemplateAst],
+               [BoundEventAst, 'e', null, 'f'],
+               [DirectiveAst, dirA],
+             ]);
+
+             expect(humanizeTplAst(parse('<ng-template (e)="f"></ng-template>', [dirA]))).toEqual([
                [EmbeddedTemplateAst],
                [BoundEventAst, 'e', null, 'f'],
                [DirectiveAst, dirA],
@@ -664,6 +677,24 @@ Binding to attribute 'onEvent' is disallowed for security reasons ("<my-componen
             [ElementAst, 'div'],
             [BoundElementPropertyAst, PropertyBindingType.Property, 'a', 'b', null],
             [DirectiveAst, dirA]
+          ]);
+        });
+
+        it('should locate directives in inline templates', () => {
+          const dirTemplate =
+              CompileDirectiveMetadata
+                  .create({
+                    selector: 'template',
+                    type:
+                        createTypeMeta({reference: {filePath: someModuleUrl, name: 'onTemplate'}})
+                  })
+                  .toSummary();
+          expect(humanizeTplAst(parse('<div *ngIf="cond">', [ngIf, dirTemplate]))).toEqual([
+            [EmbeddedTemplateAst],
+            [DirectiveAst, ngIf],
+            [BoundDirectivePropertyAst, 'ngIf', 'cond'],
+            [DirectiveAst, dirTemplate],
+            [ElementAst, 'div'],
           ]);
         });
 
@@ -827,7 +858,6 @@ Binding to attribute 'onEvent' is disallowed for security reasons ("<my-componen
         function createProvider(
             token: string, {multi = false, deps = []}: {multi?: boolean, deps?: string[]} = {}):
             CompileProviderMetadata {
-          const name = `provider${nextProviderId++}`;
           const compileToken = createToken(token);
           return {
             token: compileToken,
@@ -1043,7 +1073,7 @@ Binding to attribute 'onEvent' is disallowed for security reasons ("<my-componen
           expect(elAst.providers[2].eager).toBe(false);
         });
 
-        it('should not mark dependencies accross embedded views as eager', () => {
+        it('should not mark dependencies across embedded views as eager', () => {
           const provider0 = createProvider('service0');
           const dirA = createDir('[dirA]', {providers: [provider0]});
           const dirB = createDir('[dirB]', {deps: ['service0']});
@@ -1150,7 +1180,8 @@ Reference "#a" is defined several times ("<div #a></div><div [ERROR ->]#a></div>
            () => {
              expect(() => parse('<div #a><template #a><span>OK</span></template></div>', []))
                  .not.toThrowError();
-
+             expect(() => parse('<div #a><ng-template #a><span>OK</span></ng-template></div>', []))
+                 .not.toThrowError();
            });
 
         it('should assign references with empty value to components', () => {
@@ -1187,16 +1218,22 @@ Reference "#a" is defined several times ("<div #a></div><div [ERROR ->]#a></div>
       });
 
       describe('explicit templates', () => {
-        it('should create embedded templates for <template> elements', () => {
+        it('should create embedded templates for <ng-template> elements', () => {
           expect(humanizeTplAst(parse('<template></template>', [
           ]))).toEqual([[EmbeddedTemplateAst]]);
           expect(humanizeTplAst(parse('<TEMPLATE></TEMPLATE>', [
           ]))).toEqual([[EmbeddedTemplateAst]]);
+          expect(humanizeTplAst(parse('<ng-template></ng-template>', [
+          ]))).toEqual([[EmbeddedTemplateAst]]);
         });
 
-        it('should create embedded templates for <template> elements regardless the namespace',
+        it('should create embedded templates for <ng-template> elements regardless the namespace',
            () => {
              expect(humanizeTplAst(parse('<svg><template></template></svg>', []))).toEqual([
+               [ElementAst, ':svg:svg'],
+               [EmbeddedTemplateAst],
+             ]);
+             expect(humanizeTplAst(parse('<svg><ng-template></ng-template></svg>', []))).toEqual([
                [ElementAst, ':svg:svg'],
                [EmbeddedTemplateAst],
              ]);
@@ -1205,7 +1242,11 @@ Reference "#a" is defined several times ("<div #a></div><div [ERROR ->]#a></div>
         it('should support references via #...', () => {
           expect(humanizeTplAst(parse('<template #a>', []))).toEqual([
             [EmbeddedTemplateAst],
-            [ReferenceAst, 'a', createIdentifierToken(Identifiers.TemplateRef)]
+            [ReferenceAst, 'a', createIdentifierToken(Identifiers.TemplateRef)],
+          ]);
+          expect(humanizeTplAst(parse('<ng-template #a>', []))).toEqual([
+            [EmbeddedTemplateAst],
+            [ReferenceAst, 'a', createIdentifierToken(Identifiers.TemplateRef)],
           ]);
         });
 
@@ -1214,11 +1255,21 @@ Reference "#a" is defined several times ("<div #a></div><div [ERROR ->]#a></div>
             [EmbeddedTemplateAst],
             [ReferenceAst, 'a', createIdentifierToken(Identifiers.TemplateRef)]
           ]);
+          expect(humanizeTplAst(parse('<ng-template ref-a>', []))).toEqual([
+            [EmbeddedTemplateAst],
+            [ReferenceAst, 'a', createIdentifierToken(Identifiers.TemplateRef)]
+          ]);
         });
 
         it('should parse variables via let-...', () => {
-          expect(humanizeTplAst(parse('<template let-a="b">', [
-          ]))).toEqual([[EmbeddedTemplateAst], [VariableAst, 'a', 'b']]);
+          expect(humanizeTplAst(parse('<template let-a="b">', []))).toEqual([
+            [EmbeddedTemplateAst],
+            [VariableAst, 'a', 'b'],
+          ]);
+          expect(humanizeTplAst(parse('<ng-template let-a="b">', []))).toEqual([
+            [EmbeddedTemplateAst],
+            [VariableAst, 'a', 'b'],
+          ]);
         });
 
         it('should not locate directives in variables', () => {
@@ -1230,7 +1281,12 @@ Reference "#a" is defined several times ("<div #a></div><div [ERROR ->]#a></div>
                   })
                   .toSummary();
           expect(humanizeTplAst(parse('<template let-a="b"></template>', [dirA]))).toEqual([
-            [EmbeddedTemplateAst], [VariableAst, 'a', 'b']
+            [EmbeddedTemplateAst],
+            [VariableAst, 'a', 'b'],
+          ]);
+          expect(humanizeTplAst(parse('<ng-template let-a="b"></ng-template>', [dirA]))).toEqual([
+            [EmbeddedTemplateAst],
+            [VariableAst, 'a', 'b'],
           ]);
         });
 
@@ -1238,20 +1294,26 @@ Reference "#a" is defined several times ("<div #a></div><div [ERROR ->]#a></div>
 
       describe('inline templates', () => {
         it('should wrap the element into an EmbeddedTemplateAST', () => {
-          expect(humanizeTplAst(parse('<div template>', [
-          ]))).toEqual([[EmbeddedTemplateAst], [ElementAst, 'div']]);
+          expect(humanizeTplAst(parse('<div template>', []))).toEqual([
+            [EmbeddedTemplateAst],
+            [ElementAst, 'div'],
+          ]);
         });
 
         it('should wrap the element with data-template attribute into an EmbeddedTemplateAST ',
            () => {
-             expect(humanizeTplAst(parse('<div data-template>', [
-             ]))).toEqual([[EmbeddedTemplateAst], [ElementAst, 'div']]);
+             expect(humanizeTplAst(parse('<div data-template>', []))).toEqual([
+               [EmbeddedTemplateAst],
+               [ElementAst, 'div'],
+             ]);
            });
 
         it('should parse bound properties', () => {
           expect(humanizeTplAst(parse('<div template="ngIf test">', [ngIf]))).toEqual([
-            [EmbeddedTemplateAst], [DirectiveAst, ngIf],
-            [BoundDirectivePropertyAst, 'ngIf', 'test'], [ElementAst, 'div']
+            [EmbeddedTemplateAst],
+            [DirectiveAst, ngIf],
+            [BoundDirectivePropertyAst, 'ngIf', 'test'],
+            [ElementAst, 'div'],
           ]);
         });
 
@@ -1330,6 +1392,7 @@ Reference "#a" is defined several times ("<div #a></div><div [ERROR ->]#a></div>
             [DirectiveAst, ngIf],
             [BoundDirectivePropertyAst, 'ngIf', 'test'],
             [ElementAst, 'div'],
+
           ]);
 
           // https://github.com/angular/angular/issues/13800
@@ -1381,7 +1444,10 @@ Reference "#a" is defined several times ("<div #a></div><div [ERROR ->]#a></div>
       describe('project text nodes', () => {
         it('should project text nodes with wildcard selector', () => {
           expect(humanizeContentProjection(parse('<div>hello</div>', [createComp('div', ['*'])])))
-              .toEqual([['div', null], ['#text(hello)', 0]]);
+              .toEqual([
+                ['div', null],
+                ['#text(hello)', 0],
+              ]);
         });
       });
 
@@ -1393,24 +1459,37 @@ Reference "#a" is defined several times ("<div #a></div><div [ERROR ->]#a></div>
         });
 
         it('should project elements with css selector', () => {
-          expect(humanizeContentProjection(parse('<div><a x></a><b></b></div>', [
-            createComp('div', ['a[x]'])
-          ]))).toEqual([['div', null], ['a', 0], ['b', null]]);
+          expect(humanizeContentProjection(
+                     parse('<div><a x></a><b></b></div>', [createComp('div', ['a[x]'])])))
+              .toEqual([
+                ['div', null],
+                ['a', 0],
+                ['b', null],
+              ]);
         });
       });
 
       describe('embedded templates', () => {
         it('should project embedded templates with wildcard selector', () => {
-          expect(humanizeContentProjection(parse('<div><template></template></div>', [
-            createComp('div', ['*'])
-          ]))).toEqual([['div', null], ['template', 0]]);
+          expect(humanizeContentProjection(parse(
+                     '<div><template></template><ng-template></ng-template></div>',
+                     [createComp('div', ['*'])])))
+              .toEqual([
+                ['div', null],
+                ['template', 0],
+                ['template', 0],
+              ]);
         });
 
         it('should project embedded templates with css selector', () => {
           expect(humanizeContentProjection(parse(
-                     '<div><template x></template><template></template></div>',
-                     [createComp('div', ['template[x]'])])))
-              .toEqual([['div', null], ['template', 0], ['template', null]]);
+                     '<div><ng-template x></ng-template><ng-template></ng-template></div>',
+                     [createComp('div', ['ng-template[x]'])])))
+              .toEqual([
+                ['div', null],
+                ['template', 0],
+                ['template', null],
+              ]);
         });
       });
 
@@ -1479,18 +1558,27 @@ Reference "#a" is defined several times ("<div #a></div><div [ERROR ->]#a></div>
               .toEqual([['div', null], ['ng-content', 1]]);
         });
 
-        it('should override <template>', () => {
-          expect(humanizeContentProjection(parse(
-                     '<div><template ngProjectAs="b"></template></div>',
-                     [createComp('div', ['template', 'b'])])))
-              .toEqual([['div', null], ['template', 1]]);
+        it('should override <ng-template>', () => {
+          expect(
+              humanizeContentProjection(parse(
+                  '<div><template ngProjectAs="b"></template><ng-template ngProjectAs="b"></ng-template></div>',
+                  [createComp('div', ['template', 'b'])])))
+              .toEqual([
+                ['div', null],
+                ['template', 1],
+                ['template', 1],
+              ]);
         });
 
         it('should override inline templates', () => {
           expect(humanizeContentProjection(parse(
                      '<div><a *ngIf="cond" ngProjectAs="b"></a></div>',
                      [createComp('div', ['a', 'b']), ngIf])))
-              .toEqual([['div', null], ['template', 1], ['a', null]]);
+              .toEqual([
+                ['div', null],
+                ['template', 1],
+                ['a', null],
+              ]);
         });
       });
 
@@ -1517,13 +1605,17 @@ Reference "#a" is defined several times ("<div #a></div><div [ERROR ->]#a></div>
                 `<ng-content> element cannot have content. ("[ERROR ->]<ng-content>content</ng-content>"): TestComp@0:0`);
       });
 
-      it('should treat *attr on a template element as valid',
-         () => { expect(() => parse('<template *ngIf>', [])).not.toThrowError(); });
+      it('should treat *attr on a template element as valid', () => {
+        expect(() => parse('<template *ngIf>', [])).not.toThrowError();
+        expect(() => parse('<ng-template *ngIf>', [])).not.toThrowError();
+      });
 
-      it('should treat template attribute on a template element as valid',
-         () => { expect(() => parse('<template template="ngIf">', [])).not.toThrowError(); });
+      it('should treat template attribute on a template element as valid', () => {
+        expect(() => parse('<template template="ngIf">', [])).not.toThrowError();
+        expect(() => parse('<ng-template template="ngIf">', [])).not.toThrowError();
+      });
 
-      it('should report when mutliple *attrs are used on the same element', () => {
+      it('should report when multiple *attrs are used on the same element', () => {
         expect(() => parse('<div *ngIf *ngFor>', [])).toThrowError(`Template parse errors:
 Can't have multiple template bindings on one element. Use only one attribute named 'template' or prefixed with * ("<div *ngIf [ERROR ->]*ngFor>"): TestComp@0:11`);
       });
@@ -1608,11 +1700,18 @@ Parser Error: Unexpected token 'b' at column 3 in [a b] in TestComp@0:5 ("<div [
                      template: new CompileTemplateMetadata({ngContentSelectors: []})
                    })
                    .toSummary();
+
            expect(() => parse('<template [a]="b" (e)="f"></template>', [dirA]))
                .toThrowError(`Template parse errors:
 Event binding e not emitted by any directive on an embedded template. Make sure that the event name is spelled correctly and all directives are listed in the "@NgModule.declarations". ("<template [a]="b" [ERROR ->](e)="f"></template>"): TestComp@0:18
 Components on an embedded template: DirA ("[ERROR ->]<template [a]="b" (e)="f"></template>"): TestComp@0:0
 Property binding a not used by any directive on an embedded template. Make sure that the property name is spelled correctly and all directives are listed in the "@NgModule.declarations". ("[ERROR ->]<template [a]="b" (e)="f"></template>"): TestComp@0:0`);
+
+           expect(() => parse('<ng-template [a]="b" (e)="f"></ng-template>', [dirA]))
+               .toThrowError(`Template parse errors:
+Event binding e not emitted by any directive on an embedded template. Make sure that the event name is spelled correctly and all directives are listed in the "@NgModule.declarations". ("<ng-template [a]="b" [ERROR ->](e)="f"></ng-template>"): TestComp@0:21
+Components on an embedded template: DirA ("[ERROR ->]<ng-template [a]="b" (e)="f"></ng-template>"): TestComp@0:0
+Property binding a not used by any directive on an embedded template. Make sure that the property name is spelled correctly and all directives are listed in the "@NgModule.declarations". ("[ERROR ->]<ng-template [a]="b" (e)="f"></ng-template>"): TestComp@0:0`);
          });
 
       it('should not allow components or element bindings on inline embedded templates', () => {
@@ -1723,7 +1822,8 @@ Property binding a not used by any directive on an embedded template. Make sure 
       it('should support embedded template', () => {
         expect(humanizeTplAstSourceSpans(parse('<template></template>', [
         ]))).toEqual([[EmbeddedTemplateAst, '<template>']]);
-
+        expect(humanizeTplAstSourceSpans(parse('<ng-template></ng-template>', [
+        ]))).toEqual([[EmbeddedTemplateAst, '<ng-template>']]);
       });
 
       it('should support element and attributes', () => {
@@ -1740,8 +1840,14 @@ Property binding a not used by any directive on an embedded template. Make sure 
 
       it('should support variables', () => {
         expect(humanizeTplAstSourceSpans(parse('<template let-a="b"></template>', []))).toEqual([
-          [EmbeddedTemplateAst, '<template let-a="b">'], [VariableAst, 'a', 'b', 'let-a="b"']
+          [EmbeddedTemplateAst, '<template let-a="b">'],
+          [VariableAst, 'a', 'b', 'let-a="b"'],
         ]);
+        expect(humanizeTplAstSourceSpans(parse('<ng-template let-a="b"></ng-template>', [])))
+            .toEqual([
+              [EmbeddedTemplateAst, '<ng-template let-a="b">'],
+              [VariableAst, 'a', 'b', 'let-a="b"'],
+            ]);
       });
 
       it('should support events', () => {
@@ -1895,8 +2001,8 @@ The pipe 'test' could not be found ("{{[ERROR ->]a | test}}"): TestComp@0:2`);
       it('should expand plural messages', () => {
         const shortForm = '{ count, plural, =0 {small} many {big} }';
         const expandedForm = '<ng-container [ngPlural]="count">' +
-            '<template ngPluralCase="=0">small</template>' +
-            '<template ngPluralCase="many">big</template>' +
+            '<ng-template ngPluralCase="=0">small</ng-template>' +
+            '<ng-template ngPluralCase="many">big</ng-template>' +
             '</ng-container>';
 
         expect(humanizeTplAst(parse(shortForm, []))).toEqual(humanizeTplAst(parse(expandedForm, [
@@ -1906,8 +2012,8 @@ The pipe 'test' could not be found ("{{[ERROR ->]a | test}}"): TestComp@0:2`);
       it('should expand select messages', () => {
         const shortForm = '{ sex, select, female {foo} other {bar} }';
         const expandedForm = '<ng-container [ngSwitch]="sex">' +
-            '<template ngSwitchCase="female">foo</template>' +
-            '<template ngSwitchDefault>bar</template>' +
+            '<ng-template ngSwitchCase="female">foo</ng-template>' +
+            '<ng-template ngSwitchDefault>bar</ng-template>' +
             '</ng-container>';
 
         expect(humanizeTplAst(parse(shortForm, []))).toEqual(humanizeTplAst(parse(expandedForm, [
@@ -1921,6 +2027,47 @@ The pipe 'test' could not be found ("{{[ERROR ->]a | test}}"): TestComp@0:2`);
           [BoundTextAst, 'escaped {{ "{" }}  }'],
         ]);
       });
+    });
+  });
+
+  describe('Template Parser - opt-out `<template>` support', () => {
+    beforeEach(() => {
+      TestBed.configureCompiler({
+        providers: [{
+          provide: CompilerConfig,
+          useValue: new CompilerConfig({enableLegacyTemplate: false}),
+        }],
+      });
+    });
+
+    commonBeforeEach();
+
+    it('should support * directives', () => {
+      expect(humanizeTplAst(parse('<div *ngIf>', [ngIf]))).toEqual([
+        [EmbeddedTemplateAst],
+        [DirectiveAst, ngIf],
+        [BoundDirectivePropertyAst, 'ngIf', 'null'],
+        [ElementAst, 'div'],
+      ]);
+    });
+
+    it('should support <ng-template>', () => {
+      expect(humanizeTplAst(parse('<ng-template>', []))).toEqual([
+        [EmbeddedTemplateAst],
+      ]);
+    });
+
+    it('should treat <template> as a regular tag', () => {
+      expect(humanizeTplAst(parse('<template>', []))).toEqual([
+        [ElementAst, 'template'],
+      ]);
+    });
+
+    it('should not special case the template attribute', () => {
+      expect(humanizeTplAst(parse('<p template="ngFor">', []))).toEqual([
+        [ElementAst, 'p'],
+        [AttrAst, 'template', 'ngFor'],
+      ]);
     });
   });
 }
@@ -2033,10 +2180,6 @@ class TemplateHumanizer implements TemplateAstVisitor {
     input.push(ast.sourceSpan.toString());
     return input;
   }
-}
-
-function sourceInfo(ast: TemplateAst): string {
-  return `${ast.sourceSpan}: ${ast.sourceSpan.start}`;
 }
 
 function humanizeContentProjection(templateAsts: TemplateAst[]): any[] {

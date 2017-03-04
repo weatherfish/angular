@@ -38,7 +38,6 @@ module.exports =
         .processor(require('./processors/convertPrivateClassesToInterfaces'))
         .processor(require('./processors/generateNavigationDoc'))
         .processor(require('./processors/generateKeywords'))
-        .processor(require('./processors/extractTitleFromGuides'))
         .processor(require('./processors/createOverviewDump'))
         .processor(require('./processors/checkUnbalancedBackTicks'))
         .processor(require('./processors/addNotYetDocumentedProperty'))
@@ -46,6 +45,7 @@ module.exports =
         .processor(require('./processors/extractDecoratedClasses'))
         .processor(require('./processors/matchUpDirectiveDecorators'))
         .processor(require('./processors/filterMemberDocs'))
+        .processor(require('./processors/convertToJson'))
 
         // overrides base packageInfo and returns the one for the 'angular/angular' repo.
         .factory('packageInfo', function() { return require(path.resolve(PROJECT_ROOT, 'package.json')); })
@@ -89,7 +89,17 @@ module.exports =
           readFilesProcessor.sourceFiles = [
             {
               basePath: CONTENTS_PATH,
-              include: CONTENTS_PATH + '/cookbook/**/*.md',
+              include: CONTENTS_PATH + '/{cookbook,guide,tutorial}/**/*.md',
+              fileReader: 'contentFileReader'
+            },
+            {
+              basePath: CONTENTS_PATH + '/marketing',
+              include: CONTENTS_PATH + '/marketing/**/*.html',
+              fileReader: 'contentFileReader'
+            },
+            {
+              basePath: CONTENTS_PATH,
+              include: CONTENTS_PATH + '/file-not-found.md',
               fileReader: 'contentFileReader'
             },
             {basePath: CONTENTS_PATH, include: CONTENTS_PATH + '/cheatsheet/*.md'},
@@ -211,12 +221,12 @@ module.exports =
                     doc.id.replace(/^@angular\//, API_SEGMENT + '/').replace(/\/index$/, '');
                 return doc.moduleFolder;
               },
-              outputPathTemplate: '${moduleFolder}/index.html'
+              outputPathTemplate: '${moduleFolder}/index.json'
             },
             {
               docTypes: EXPORT_DOC_TYPES.concat(['decorator', 'directive', 'pipe']),
               pathTemplate: '${moduleDoc.moduleFolder}/${name}',
-              outputPathTemplate: '${moduleDoc.moduleFolder}/${name}.html',
+              outputPathTemplate: '${moduleDoc.moduleFolder}/${name}.json',
             },
             {
               docTypes: ['api-list-data', 'api-list-audit'],
@@ -229,9 +239,16 @@ module.exports =
               outputPathTemplate: '${path}'
             },
             {docTypes: ['example-region'], getOutputPath: function() {}},
-            {docTypes: ['content'], pathTemplate: '${id}', outputPathTemplate: '${path}.html'}
+            {docTypes: ['content'], pathTemplate: '${id}', outputPathTemplate: '${path}.json'}
           ];
+        })
+
+        .config(function(convertToJsonProcessor, EXPORT_DOC_TYPES) {
+          convertToJsonProcessor.docTypes = EXPORT_DOC_TYPES.concat([
+            'content', 'decorator', 'directive', 'pipe', 'module'
+          ]);
         });
+
 
 function requireFolder(folderPath) {
   const absolutePath = path.resolve(__dirname, folderPath);

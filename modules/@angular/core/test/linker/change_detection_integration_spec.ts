@@ -6,37 +6,19 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {USE_VIEW_ENGINE} from '@angular/compiler/src/config';
 import {ElementSchemaRegistry} from '@angular/compiler/src/schema/element_schema_registry';
 import {TEST_COMPILER_PROVIDERS} from '@angular/compiler/testing/test_bindings';
-import {AfterContentChecked, AfterContentInit, AfterViewChecked, AfterViewInit, ChangeDetectionStrategy, ChangeDetectorRef, Component, DebugElement, Directive, DoCheck, Inject, Injectable, Input, OnChanges, OnDestroy, OnInit, Output, Pipe, PipeTransform, RenderComponentType, Renderer, RendererFactoryV2, RootRenderer, SimpleChange, SimpleChanges, TemplateRef, Type, ViewChild, ViewContainerRef, WrappedValue} from '@angular/core';
-import {DebugDomRenderer} from '@angular/core/src/debug/debug_renderer';
+import {AfterContentChecked, AfterContentInit, AfterViewChecked, AfterViewInit, ChangeDetectionStrategy, ChangeDetectorRef, Component, DebugElement, Directive, DoCheck, HostBinding, Inject, Injectable, Input, OnChanges, OnDestroy, OnInit, Output, Pipe, PipeTransform, RenderComponentType, Renderer, RendererFactoryV2, RootRenderer, SimpleChange, SimpleChanges, TemplateRef, Type, ViewChild, ViewContainerRef, WrappedValue} from '@angular/core';
 import {ComponentFixture, TestBed, fakeAsync} from '@angular/core/testing';
 import {By} from '@angular/platform-browser/src/dom/debug/by';
 import {getDOM} from '@angular/platform-browser/src/dom/dom_adapter';
-import {DomRootRenderer} from '@angular/platform-browser/src/dom/dom_renderer';
+import {expect} from '@angular/platform-browser/testing/matchers';
 
+import {DomElementSchemaRegistry} from '../../../compiler/index';
 import {MockSchemaRegistry} from '../../../compiler/testing/index';
 import {EventEmitter} from '../../src/facade/async';
 
 export function main() {
-  describe('Current compiler', () => { createTests({viewEngine: false}); });
-
-  describe('View Engine compiler', () => {
-    beforeEach(() => {
-      TestBed.configureCompiler({
-        useJit: true,
-        providers: [
-          {provide: USE_VIEW_ENGINE, useValue: true},
-        ]
-      });
-    });
-
-    createTests({viewEngine: true});
-  });
-}
-
-function createTests({viewEngine}: {viewEngine: boolean}) {
   let elSchema: MockSchemaRegistry;
   let renderLog: RenderLog;
   let directiveLog: DirectiveLog;
@@ -123,7 +105,6 @@ function createTests({viewEngine}: {viewEngine: boolean}) {
         providers: [
           RenderLog,
           DirectiveLog,
-          {provide: RootRenderer, useClass: LoggingRootRenderer},
         ],
       });
     });
@@ -485,8 +466,8 @@ function createTests({viewEngine}: {viewEngine: boolean}) {
          fakeAsync(() => { expect(_bindAndCheckSimpleValue('"$"')).toEqual(['someProp=$']); }));
 
       it('should read locals', fakeAsync(() => {
-           const ctx =
-               createCompFixture('<template testLocals let-local="someLocal">{{local}}</template>');
+           const ctx = createCompFixture(
+               '<ng-template testLocals let-local="someLocal">{{local}}</ng-template>');
            ctx.detectChanges(false);
 
            expect(renderLog.log).toEqual(['{{someLocalValue}}']);
@@ -906,12 +887,13 @@ function createTests({viewEngine}: {viewEngine: boolean}) {
         it('should be called in reverse order so the child is always notified before the parent',
            fakeAsync(() => {
              const ctx = createCompFixture(
-                 '<div testDirective="parent"><div testDirective="child"></div></div>');
+                 '<div testDirective="parent"><div testDirective="child"></div></div><div testDirective="sibling"></div>');
 
              ctx.detectChanges(false);
 
              expect(directiveLog.filter(['ngAfterContentChecked'])).toEqual([
-               'child.ngAfterContentChecked', 'parent.ngAfterContentChecked'
+               'child.ngAfterContentChecked', 'parent.ngAfterContentChecked',
+               'sibling.ngAfterContentChecked'
              ]);
            }));
       });
@@ -1018,12 +1000,12 @@ function createTests({viewEngine}: {viewEngine: boolean}) {
         it('should be called in reverse order so the child is always notified before the parent',
            fakeAsync(() => {
              const ctx = createCompFixture(
-                 '<div testDirective="parent"><div testDirective="child"></div></div>');
+                 '<div testDirective="parent"><div testDirective="child"></div></div><div testDirective="sibling"></div>');
 
              ctx.detectChanges(false);
 
              expect(directiveLog.filter(['ngAfterViewChecked'])).toEqual([
-               'child.ngAfterViewChecked', 'parent.ngAfterViewChecked'
+               'child.ngAfterViewChecked', 'parent.ngAfterViewChecked', 'sibling.ngAfterViewChecked'
              ]);
            }));
       });
@@ -1061,13 +1043,13 @@ function createTests({viewEngine}: {viewEngine: boolean}) {
         it('should be called in reverse order so the child is always notified before the parent',
            fakeAsync(() => {
              const ctx = createCompFixture(
-                 '<div testDirective="parent"><div testDirective="child"></div></div>');
+                 '<div testDirective="parent"><div testDirective="child"></div></div><div testDirective="sibling"></div>');
 
              ctx.detectChanges(false);
              ctx.destroy();
 
              expect(directiveLog.filter(['ngOnDestroy'])).toEqual([
-               'child.ngOnDestroy', 'parent.ngOnDestroy'
+               'child.ngOnDestroy', 'parent.ngOnDestroy', 'sibling.ngOnDestroy'
              ]);
            }));
 
@@ -1242,7 +1224,7 @@ function createTests({viewEngine}: {viewEngine: boolean}) {
 
       it('should recurse into nested view containers even if there are no bindings in the component view',
          () => {
-           @Component({template: '<template #vc>{{name}}</template>'})
+           @Component({template: '<ng-template #vc>{{name}}</ng-template>'})
            class Comp {
              name = 'Tom';
              @ViewChild('vc', {read: ViewContainerRef}) vc: ViewContainerRef;
@@ -1260,6 +1242,36 @@ function createTests({viewEngine}: {viewEngine: boolean}) {
            ctx.detectChanges();
            expect(renderLog.loggedValues).toEqual(['Tom']);
          });
+    });
+
+    describe('class binding', () => {
+      it('should coordinate class attribute and class host binding', () => {
+        @Component({template: `<div class="{{initClasses}}" someDir></div>`})
+        class Comp {
+          initClasses = 'init';
+        }
+
+        @Directive({selector: '[someDir]'})
+        class SomeDir {
+          @HostBinding('class.foo')
+          fooClass = true;
+        }
+
+        const ctx =
+            TestBed
+                .configureCompiler({
+                  providers:
+                      [{provide: ElementSchemaRegistry, useExisting: DomElementSchemaRegistry}]
+                })
+                .configureTestingModule({declarations: [Comp, SomeDir]})
+                .createComponent(Comp);
+
+        ctx.detectChanges();
+
+        const divEl = ctx.debugElement.children[0];
+        expect(divEl.nativeElement).toHaveCssClass('init');
+        expect(divEl.nativeElement).toHaveCssClass('foo');
+      });
     });
   });
 }
@@ -1285,26 +1297,6 @@ class RenderLog {
   }
 }
 
-@Injectable()
-class LoggingRootRenderer implements RootRenderer {
-  constructor(private _delegate: DomRootRenderer, private _log: RenderLog) {}
-
-  renderComponent(componentProto: RenderComponentType): Renderer {
-    return new LoggingRenderer(this._delegate.renderComponent(componentProto), this._log);
-  }
-}
-
-class LoggingRenderer extends DebugDomRenderer {
-  constructor(delegate: Renderer, private _log: RenderLog) { super(delegate); }
-
-  setElementProperty(renderElement: any, propertyName: string, propertyValue: any) {
-    this._log.setElementProperty(renderElement, propertyName, propertyValue);
-    super.setElementProperty(renderElement, propertyName, propertyValue);
-  }
-
-  setText(renderNode: any, value: string) { this._log.setText(renderNode, value); }
-}
-
 class DirectiveLogEntry {
   constructor(public directiveName: string, public method: string) {}
 }
@@ -1325,13 +1317,13 @@ function patchLoggingRendererV2(rendererFactory: RendererFactoryV2, log: RenderL
     const origSetValue = renderer.setValue;
     renderer.setProperty = function(el: any, name: string, value: any): void {
       log.setElementProperty(el, name, value);
-      origSetProperty.call(this, el, name, value);
+      origSetProperty.call(renderer, el, name, value);
     };
     renderer.setValue = function(node: any, value: string): void {
       if (getDOM().isTextNode(node)) {
         log.setText(node, value);
       }
-      origSetValue.call(this, node, value);
+      origSetValue.call(renderer, node, value);
     };
     return renderer;
   };

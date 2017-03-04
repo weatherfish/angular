@@ -131,6 +131,8 @@ function i18nTest() {
         compilerOptions: config.parsed.options, program, host,
         angularCompilerOptions: config.ngOptions,
         i18nFormat: 'xlf',
+        locale: null,
+        outFile: null,
         readResource: (fileName: string) => {
           readResources.push(fileName);
           return hostContext.readResource(fileName);

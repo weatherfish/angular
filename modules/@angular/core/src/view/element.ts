@@ -7,47 +7,53 @@
  */
 
 import {isDevMode} from '../application_ref';
+import {RendererTypeV2, RendererV2} from '../render/api';
 import {SecurityContext} from '../security';
 
-import {BindingDef, BindingType, DebugContext, DisposableFn, ElementData, ElementOutputDef, NodeData, NodeDef, NodeFlags, NodeType, QueryValueType, Services, ViewData, ViewDefinition, ViewDefinitionFactory, ViewFlags, asElementData} from './types';
+import {BindingDef, BindingType, DebugContext, DisposableFn, ElementData, ElementHandleEventFn, NodeData, NodeDef, NodeFlags, OutputDef, OutputType, QueryValueType, Services, ViewData, ViewDefinition, ViewDefinitionFactory, ViewFlags, asElementData, asProviderData} from './types';
 import {checkAndUpdateBinding, dispatchEvent, elementEventFullName, filterQueryId, getParentRenderElement, resolveViewDefinition, sliceErrorStack, splitMatchedQueriesDsl, splitNamespace} from './util';
+
+const NOOP: any = () => {};
 
 export function anchorDef(
     flags: NodeFlags, matchedQueriesDsl: [string | number, QueryValueType][],
-    ngContentIndex: number, childCount: number, templateFactory?: ViewDefinitionFactory): NodeDef {
+    ngContentIndex: number, childCount: number, handleEvent?: ElementHandleEventFn,
+    templateFactory?: ViewDefinitionFactory): NodeDef {
+  if (!handleEvent) {
+    handleEvent = NOOP;
+  }
+  flags |= NodeFlags.TypeElement;
   const {matchedQueries, references, matchedQueryIds} = splitMatchedQueriesDsl(matchedQueriesDsl);
   // skip the call to sliceErrorStack itself + the call to this function.
   const source = isDevMode() ? sliceErrorStack(2, 3) : '';
   const template = templateFactory ? resolveViewDefinition(templateFactory) : null;
 
   return {
-    type: NodeType.Element,
     // will bet set by the view definition
     index: undefined,
-    reverseChildIndex: undefined,
     parent: undefined,
     renderParent: undefined,
     bindingIndex: undefined,
-    disposableIndex: undefined,
+    outputIndex: undefined,
     // regular values
     flags,
     childFlags: 0,
+    directChildFlags: 0,
     childMatchedQueries: 0, matchedQueries, matchedQueryIds, references, ngContentIndex, childCount,
     bindings: [],
-    disposableCount: 0,
+    outputs: [],
     element: {
       ns: undefined,
       name: undefined,
-      attrs: undefined,
-      outputs: [], template, source,
-      // will bet set by the view definition
-      component: undefined,
+      attrs: undefined, template, source,
+      componentProvider: undefined,
+      componentView: undefined,
+      componentRendererType: undefined,
       publicProviders: undefined,
-      allProviders: undefined,
+      allProviders: undefined, handleEvent
     },
     provider: undefined,
     text: undefined,
-    pureExpression: undefined,
     query: undefined,
     ngContent: undefined
   };
@@ -59,8 +65,16 @@ export function elementDef(
     fixedAttrs: [string, string][] = [],
     bindings?:
         ([BindingType.ElementClass, string] | [BindingType.ElementStyle, string, string] |
-         [BindingType.ElementAttribute | BindingType.ElementProperty, string, SecurityContext])[],
-    outputs?: (string | [string, string])[]): NodeDef {
+         [
+           BindingType.ElementAttribute | BindingType.ElementProperty |
+               BindingType.ComponentHostProperty,
+           string, SecurityContext
+         ])[],
+    outputs?: ([string, string])[], handleEvent?: ElementHandleEventFn,
+    componentView?: () => ViewDefinition, componentRendererType?: RendererTypeV2): NodeDef {
+  if (!handleEvent) {
+    handleEvent = NOOP;
+  }
   // skip the call to sliceErrorStack itself + the call to this function.
   const source = isDevMode() ? sliceErrorStack(2, 3) : '';
   const {matchedQueries, references, matchedQueryIds} = splitMatchedQueriesDsl(matchedQueriesDsl);
@@ -84,58 +98,63 @@ export function elementDef(
         break;
       case BindingType.ElementAttribute:
       case BindingType.ElementProperty:
+      case BindingType.ComponentHostProperty:
         securityContext = <SecurityContext>entry[2];
         break;
     }
     bindingDefs[i] = {type: bindingType, ns, name, nonMinifiedName: name, securityContext, suffix};
   }
   outputs = outputs || [];
-  const outputDefs: ElementOutputDef[] = new Array(outputs.length);
+  const outputDefs: OutputDef[] = new Array(outputs.length);
   for (let i = 0; i < outputs.length; i++) {
-    const output = outputs[i];
-    let target: string;
-    let eventName: string;
-    if (Array.isArray(output)) {
-      [target, eventName] = output;
-    } else {
-      eventName = output;
-    }
-    outputDefs[i] = {eventName: eventName, target: target};
+    const [target, eventName] = outputs[i];
+    outputDefs[i] = {
+      type: OutputType.ElementOutput,
+      target: <any>target, eventName,
+      propName: undefined
+    };
   }
   fixedAttrs = fixedAttrs || [];
   const attrs = <[string, string, string][]>fixedAttrs.map(([namespaceAndName, value]) => {
     const [ns, name] = splitNamespace(namespaceAndName);
     return [ns, name, value];
   });
+  // This is needed as the jit compiler always uses an empty hash as default RendererTypeV2,
+  // which is not filled for host views.
+  if (componentRendererType && componentRendererType.encapsulation == null) {
+    componentRendererType = null;
+  }
+  if (componentView) {
+    flags |= NodeFlags.ComponentView;
+  }
+  flags |= NodeFlags.TypeElement;
   return {
-    type: NodeType.Element,
     // will bet set by the view definition
     index: undefined,
-    reverseChildIndex: undefined,
     parent: undefined,
     renderParent: undefined,
     bindingIndex: undefined,
-    disposableIndex: undefined,
+    outputIndex: undefined,
     // regular values
     flags,
     childFlags: 0,
+    directChildFlags: 0,
     childMatchedQueries: 0, matchedQueries, matchedQueryIds, references, ngContentIndex, childCount,
     bindings: bindingDefs,
-    disposableCount: outputDefs.length,
+    outputs: outputDefs,
     element: {
       ns,
       name,
       attrs,
-      outputs: outputDefs, source,
+      source,
       template: undefined,
       // will bet set by the view definition
-      component: undefined,
+      componentProvider: undefined, componentView, componentRendererType,
       publicProviders: undefined,
-      allProviders: undefined,
+      allProviders: undefined, handleEvent,
     },
     provider: undefined,
     text: undefined,
-    pureExpression: undefined,
     query: undefined,
     ngContent: undefined
   };
@@ -165,21 +184,24 @@ export function createElement(view: ViewData, renderHost: any, def: NodeDef): El
       renderer.setAttribute(el, name, value, ns);
     }
   }
-  if (elDef.outputs.length) {
-    for (let i = 0; i < elDef.outputs.length; i++) {
-      const output = elDef.outputs[i];
-      const handleEventClosure = renderEventHandlerClosure(
-          view, def.index, elementEventFullName(output.target, output.eventName));
-      const disposable =
-          <any>renderer.listen(output.target || el, output.eventName, handleEventClosure);
-      view.disposables[def.disposableIndex + i] = disposable;
+  return el;
+}
+
+export function listenToElementOutputs(view: ViewData, compView: ViewData, def: NodeDef, el: any) {
+  for (let i = 0; i < def.outputs.length; i++) {
+    const output = def.outputs[i];
+    const handleEventClosure = renderEventHandlerClosure(
+        view, def.index, elementEventFullName(output.target, output.eventName));
+    let listenTarget = output.target;
+    let listenerView = view;
+    if (output.target === 'component') {
+      listenTarget = null;
+      listenerView = compView;
     }
+    const disposable =
+        <any>listenerView.renderer.listen(listenTarget || el, output.eventName, handleEventClosure);
+    view.disposables[def.outputIndex + i] = disposable;
   }
-  return {
-    renderElement: el,
-    embeddedViews: (def.flags & NodeFlags.HasEmbeddedViews) ? [] : undefined,
-    projectedViews: undefined
-  };
 }
 
 function renderEventHandlerClosure(view: ViewData, index: number, eventName: string) {
@@ -189,44 +211,37 @@ function renderEventHandlerClosure(view: ViewData, index: number, eventName: str
 
 export function checkAndUpdateElementInline(
     view: ViewData, def: NodeDef, v0: any, v1: any, v2: any, v3: any, v4: any, v5: any, v6: any,
-    v7: any, v8: any, v9: any) {
-  // Note: fallthrough is intended!
-  switch (def.bindings.length) {
-    case 10:
-      checkAndUpdateElementValue(view, def, 9, v9);
-    case 9:
-      checkAndUpdateElementValue(view, def, 8, v8);
-    case 8:
-      checkAndUpdateElementValue(view, def, 7, v7);
-    case 7:
-      checkAndUpdateElementValue(view, def, 6, v6);
-    case 6:
-      checkAndUpdateElementValue(view, def, 5, v5);
-    case 5:
-      checkAndUpdateElementValue(view, def, 4, v4);
-    case 4:
-      checkAndUpdateElementValue(view, def, 3, v3);
-    case 3:
-      checkAndUpdateElementValue(view, def, 2, v2);
-    case 2:
-      checkAndUpdateElementValue(view, def, 1, v1);
-    case 1:
-      checkAndUpdateElementValue(view, def, 0, v0);
-  }
+    v7: any, v8: any, v9: any): boolean {
+  const bindLen = def.bindings.length;
+  let changed = false;
+  if (bindLen > 0 && checkAndUpdateElementValue(view, def, 0, v0)) changed = true;
+  if (bindLen > 1 && checkAndUpdateElementValue(view, def, 1, v1)) changed = true;
+  if (bindLen > 2 && checkAndUpdateElementValue(view, def, 2, v2)) changed = true;
+  if (bindLen > 3 && checkAndUpdateElementValue(view, def, 3, v3)) changed = true;
+  if (bindLen > 4 && checkAndUpdateElementValue(view, def, 4, v4)) changed = true;
+  if (bindLen > 5 && checkAndUpdateElementValue(view, def, 5, v5)) changed = true;
+  if (bindLen > 6 && checkAndUpdateElementValue(view, def, 6, v6)) changed = true;
+  if (bindLen > 7 && checkAndUpdateElementValue(view, def, 7, v7)) changed = true;
+  if (bindLen > 8 && checkAndUpdateElementValue(view, def, 8, v8)) changed = true;
+  if (bindLen > 9 && checkAndUpdateElementValue(view, def, 9, v9)) changed = true;
+  return changed;
 }
 
-export function checkAndUpdateElementDynamic(view: ViewData, def: NodeDef, values: any[]) {
+export function checkAndUpdateElementDynamic(view: ViewData, def: NodeDef, values: any[]): boolean {
+  let changed = false;
   for (let i = 0; i < values.length; i++) {
-    checkAndUpdateElementValue(view, def, i, values[i]);
+    if (checkAndUpdateElementValue(view, def, i, values[i])) changed = true;
   }
+  return changed;
 }
 
 function checkAndUpdateElementValue(view: ViewData, def: NodeDef, bindingIdx: number, value: any) {
   if (!checkAndUpdateBinding(view, def, bindingIdx, value)) {
-    return;
+    return false;
   }
   const binding = def.bindings[bindingIdx];
-  const renderNode = asElementData(view, def.index).renderElement;
+  const elData = asElementData(view, def.index);
+  const renderNode = elData.renderElement;
   const name = binding.name;
   switch (binding.type) {
     case BindingType.ElementAttribute:
@@ -241,7 +256,11 @@ function checkAndUpdateElementValue(view: ViewData, def: NodeDef, bindingIdx: nu
     case BindingType.ElementProperty:
       setElementProperty(view, binding, renderNode, name, value);
       break;
+    case BindingType.ComponentHostProperty:
+      setElementProperty(elData.componentView, binding, renderNode, name, value);
+      break;
   }
+  return true;
 }
 
 function setElementAttribute(

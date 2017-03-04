@@ -3,7 +3,7 @@ set -ex -o pipefail
 
 # These ones can be `npm link`ed for fast development
 LINKABLE_PKGS=(
-  $(pwd)/dist/packages-dist/{common,forms,core,compiler,compiler-cli,platform-{browser,server},platform-browser-dynamic,router,http}
+  $(pwd)/dist/packages-dist/{common,forms,core,compiler,compiler-cli,platform-{browser,server},platform-browser-dynamic,router,http,animations}
   $(pwd)/dist/tools/@angular/tsc-wrapped
 )
 
@@ -48,8 +48,8 @@ cp -v package.json $TMP
 
   ./node_modules/.bin/ngc -p tsconfig-build.json --i18nFile=src/messages.fi.xlf --locale=fi --i18nFormat=xlf
 
-  ./node_modules/.bin/ng-xi18n -p tsconfig-xi18n.json --i18nFormat=xlf
-  ./node_modules/.bin/ng-xi18n -p tsconfig-xi18n.json --i18nFormat=xmb
+  ./node_modules/.bin/ng-xi18n -p tsconfig-xi18n.json --i18nFormat=xlf --locale=fr
+  ./node_modules/.bin/ng-xi18n -p tsconfig-xi18n.json --i18nFormat=xmb --outFile=custom_file.xmb
 
   node test/test_summaries.js
   node test/test_ngtools_api.js

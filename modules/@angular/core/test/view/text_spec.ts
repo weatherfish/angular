@@ -17,8 +17,8 @@ export function main() {
   describe(`View Text`, () => {
     function compViewDef(
         nodes: NodeDef[], updateDirectives?: ViewUpdateFn, updateRenderer?: ViewUpdateFn,
-        handleEvent?: ViewHandleEventFn, viewFlags: ViewFlags = ViewFlags.None): ViewDefinition {
-      return viewDef(viewFlags, nodes, updateDirectives, updateRenderer, handleEvent);
+        viewFlags: ViewFlags = ViewFlags.None): ViewDefinition {
+      return viewDef(viewFlags, nodes, updateDirectives, updateRenderer);
     }
 
     function createAndGetRootNodes(
@@ -62,7 +62,7 @@ export function main() {
 
     describe('change text', () => {
       ARG_TYPE_VALUES.forEach((inlineDynamic) => {
-        it(`should update ${ArgumentType[inlineDynamic]}`, () => {
+        it(`should update via strategy ${inlineDynamic}`, () => {
           const {view, rootNodes} = createAndGetRootNodes(compViewDef(
               [
                 textDef(null, ['0', '1', '2']),

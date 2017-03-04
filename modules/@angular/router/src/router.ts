@@ -22,10 +22,11 @@ import {mergeMap} from 'rxjs/operator/mergeMap';
 import {reduce} from 'rxjs/operator/reduce';
 
 import {applyRedirects} from './apply_redirects';
-import {QueryParamsHandling, ResolveData, Routes, validateConfig} from './config';
+import {QueryParamsHandling, ResolveData, Route, Routes, RunGuardsAndResolvers, validateConfig} from './config';
 import {createRouterState} from './create_router_state';
 import {createUrlTree} from './create_url_tree';
 import {RouterOutlet} from './directives/router_outlet';
+import {Event, NavigationCancel, NavigationEnd, NavigationError, NavigationStart, RouteConfigLoadEnd, RouteConfigLoadStart, RoutesRecognized} from './events';
 import {recognize} from './recognize';
 import {DetachedRouteHandle, DetachedRouteHandleInternal, RouteReuseStrategy} from './route_reuse_strategy';
 import {LoadedRouterConfig, RouterConfigLoader} from './router_config_loader';
@@ -34,7 +35,7 @@ import {ActivatedRoute, ActivatedRouteSnapshot, RouterState, RouterStateSnapshot
 import {PRIMARY_OUTLET, Params, isNavigationCancelingError} from './shared';
 import {DefaultUrlHandlingStrategy, UrlHandlingStrategy} from './url_handling_strategy';
 import {UrlSerializer, UrlTree, containsTree, createEmptyUrlTree} from './url_tree';
-import {andObservables, forEach, merge, waitForMap, wrapIntoObservable} from './utils/collection';
+import {andObservables, forEach, merge, shallowEqual, waitForMap, wrapIntoObservable} from './utils/collection';
 import {TreeNode} from './utils/tree';
 
 declare let Zone: any;
@@ -152,119 +153,6 @@ export interface NavigationExtras {
 }
 
 /**
- * @whatItDoes Represents an event triggered when a navigation starts.
- *
- * @stable
- */
-export class NavigationStart {
-  // TODO: vsavkin: make internal
-  constructor(
-      /** @docsNotRequired */
-      public id: number,
-      /** @docsNotRequired */
-      public url: string) {}
-
-  /** @docsNotRequired */
-  toString(): string { return `NavigationStart(id: ${this.id}, url: '${this.url}')`; }
-}
-
-/**
- * @whatItDoes Represents an event triggered when a navigation ends successfully.
- *
- * @stable
- */
-export class NavigationEnd {
-  // TODO: vsavkin: make internal
-  constructor(
-      /** @docsNotRequired */
-      public id: number,
-      /** @docsNotRequired */
-      public url: string,
-      /** @docsNotRequired */
-      public urlAfterRedirects: string) {}
-
-  /** @docsNotRequired */
-  toString(): string {
-    return `NavigationEnd(id: ${this.id}, url: '${this.url}', urlAfterRedirects: '${this.urlAfterRedirects}')`;
-  }
-}
-
-/**
- * @whatItDoes Represents an event triggered when a navigation is canceled.
- *
- * @stable
- */
-export class NavigationCancel {
-  // TODO: vsavkin: make internal
-  constructor(
-      /** @docsNotRequired */
-      public id: number,
-      /** @docsNotRequired */
-      public url: string,
-      /** @docsNotRequired */
-      public reason: string) {}
-
-  /** @docsNotRequired */
-  toString(): string { return `NavigationCancel(id: ${this.id}, url: '${this.url}')`; }
-}
-
-/**
- * @whatItDoes Represents an event triggered when a navigation fails due to an unexpected error.
- *
- * @stable
- */
-export class NavigationError {
-  // TODO: vsavkin: make internal
-  constructor(
-      /** @docsNotRequired */
-      public id: number,
-      /** @docsNotRequired */
-      public url: string,
-      /** @docsNotRequired */
-      public error: any) {}
-
-  /** @docsNotRequired */
-  toString(): string {
-    return `NavigationError(id: ${this.id}, url: '${this.url}', error: ${this.error})`;
-  }
-}
-
-/**
- * @whatItDoes Represents an event triggered when routes are recognized.
- *
- * @stable
- */
-export class RoutesRecognized {
-  // TODO: vsavkin: make internal
-  constructor(
-      /** @docsNotRequired */
-      public id: number,
-      /** @docsNotRequired */
-      public url: string,
-      /** @docsNotRequired */
-      public urlAfterRedirects: string,
-      /** @docsNotRequired */
-      public state: RouterStateSnapshot) {}
-
-  /** @docsNotRequired */
-  toString(): string {
-    return `RoutesRecognized(id: ${this.id}, url: '${this.url}', urlAfterRedirects: '${this.urlAfterRedirects}', state: ${this.state})`;
-  }
-}
-
-/**
- * @whatItDoes Represents a router event.
- *
- * Please see {@link NavigationStart}, {@link NavigationEnd}, {@link NavigationCancel}, {@link
- * NavigationError},
- * {@link RoutesRecognized} for more information.
- *
- * @stable
- */
-export type Event =
-    NavigationStart | NavigationEnd | NavigationCancel | NavigationError | RoutesRecognized;
-
-/**
  * @whatItDoes Error handler that is invoked when a navigation errors.
  *
  * @description
@@ -291,7 +179,6 @@ type NavigationParams = {
   promise: Promise<boolean>,
   source: NavigationSource,
 };
-
 
 /**
  * Does not detach any subtrees. Reuses routes as long as their route config is the same.
@@ -354,10 +241,14 @@ export class Router {
       private rootComponentType: Type<any>, private urlSerializer: UrlSerializer,
       private outletMap: RouterOutletMap, private location: Location, private injector: Injector,
       loader: NgModuleFactoryLoader, compiler: Compiler, public config: Routes) {
+    const onLoadStart = (r: Route) => this.triggerEvent(new RouteConfigLoadStart(r));
+    const onLoadEnd = (r: Route) => this.triggerEvent(new RouteConfigLoadEnd(r));
+
     this.resetConfig(config);
     this.currentUrlTree = createEmptyUrlTree();
     this.rawUrlTree = this.currentUrlTree;
-    this.configLoader = new RouterConfigLoader(loader, compiler);
+
+    this.configLoader = new RouterConfigLoader(loader, compiler, onLoadStart, onLoadEnd);
     this.currentRouterState = createEmptyState(this.currentUrlTree, this.rootComponentType);
     this.processNavigations();
   }
@@ -406,6 +297,9 @@ export class Router {
 
   /** An observable of router events */
   get events(): Observable<Event> { return this.routerEvents; }
+
+  /** @internal */
+  triggerEvent(e: Event) { this.routerEvents.next(e); }
 
   /**
    * Resets the configuration used for navigation and generating links.
@@ -526,14 +420,10 @@ export class Router {
    */
   navigateByUrl(url: string|UrlTree, extras: NavigationExtras = {skipLocationChange: false}):
       Promise<boolean> {
-    if (url instanceof UrlTree) {
-      return this.scheduleNavigation(
-          this.urlHandlingStrategy.merge(url, this.rawUrlTree), 'imperative', extras);
-    }
+    const urlTree = url instanceof UrlTree ? url : this.parseUrl(url);
+    const mergedTree = this.urlHandlingStrategy.merge(urlTree, this.rawUrlTree);
 
-    const urlTree = this.urlSerializer.parse(url);
-    return this.scheduleNavigation(
-        this.urlHandlingStrategy.merge(urlTree, this.rawUrlTree), 'imperative', extras);
+    return this.scheduleNavigation(mergedTree, 'imperative', extras);
   }
 
   /**
@@ -622,8 +512,8 @@ export class Router {
     }
 
     // Because of a bug in IE and Edge, the location class fires two events (popstate and
-    // hashchange)
-    // every single time. The second one should be ignored. Otherwise, the URL will flicker.
+    // hashchange) every single time. The second one should be ignored. Otherwise, the URL will
+    // flicker.
     if (lastNavigation && source == 'hashchange' && lastNavigation.source === 'popstate' &&
         lastNavigation.rawUrl.toString() === rawUrl.toString()) {
       return null;  // return value is not used
@@ -908,7 +798,8 @@ export class PreActivation {
 
     // reusing the node
     if (curr && future._routeConfig === curr._routeConfig) {
-      if (!equalParamsAndUrlSegments(future, curr)) {
+      if (this.shouldRunGuardsAndResolvers(
+              curr, future, future._routeConfig.runGuardsAndResolvers)) {
         this.checks.push(new CanDeactivate(outlet.component, curr), new CanActivate(futurePath));
       } else {
         // we need to set the data
@@ -939,6 +830,23 @@ export class PreActivation {
       } else {
         this.traverseChildRoutes(futureNode, null, parentOutletMap, futurePath);
       }
+    }
+  }
+
+  private shouldRunGuardsAndResolvers(
+      curr: ActivatedRouteSnapshot, future: ActivatedRouteSnapshot,
+      mode: RunGuardsAndResolvers): boolean {
+    switch (mode) {
+      case 'always':
+        return true;
+
+      case 'paramsOrQueryParamsChange':
+        return !equalParamsAndUrlSegments(curr, future) ||
+            !shallowEqual(curr.queryParams, future.queryParams);
+
+      case 'paramsChange':
+      default:
+        return !equalParamsAndUrlSegments(curr, future);
     }
   }
 

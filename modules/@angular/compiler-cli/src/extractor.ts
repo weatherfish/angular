@@ -27,7 +27,7 @@ export class Extractor {
       public host: ts.CompilerHost, private ngCompilerHost: CompilerHost,
       private program: ts.Program) {}
 
-  extract(formatName: string): Promise<void> {
+  extract(formatName: string, outFile: string|null): Promise<void> {
     // Checks the format and returns the extension
     const ext = this.getExtension(formatName);
 
@@ -35,7 +35,8 @@ export class Extractor {
 
     return promiseBundle.then(bundle => {
       const content = this.serialize(bundle, ext);
-      const dstPath = path.join(this.options.genDir, `messages.${ext}`);
+      const dstFile = outFile || `messages.${ext}`;
+      const dstPath = path.join(this.options.genDir, dstFile);
       this.host.writeFile(dstPath, content, false);
     });
   }
@@ -73,7 +74,8 @@ export class Extractor {
 
   static create(
       options: tsc.AngularCompilerOptions, program: ts.Program, tsCompilerHost: ts.CompilerHost,
-      compilerHostContext?: CompilerHostContext, ngCompilerHost?: CompilerHost): Extractor {
+      locale?: string|null, compilerHostContext?: CompilerHostContext,
+      ngCompilerHost?: CompilerHost): Extractor {
     if (!ngCompilerHost) {
       const usePathMapping = !!options.rootDirs && options.rootDirs.length > 0;
       const context = compilerHostContext || new ModuleResolutionHostAdapter(tsCompilerHost);
@@ -81,7 +83,7 @@ export class Extractor {
                                         new CompilerHost(program, options, context);
     }
 
-    const {extractor: ngExtractor} = compiler.Extractor.create(ngCompilerHost);
+    const {extractor: ngExtractor} = compiler.Extractor.create(ngCompilerHost, locale || null);
 
     return new Extractor(options, ngExtractor, tsCompilerHost, ngCompilerHost, program);
   }

@@ -16,8 +16,8 @@ export function main() {
   describe(`View NgContent`, () => {
     function compViewDef(
         nodes: NodeDef[], updateDirectives?: ViewUpdateFn, updateRenderer?: ViewUpdateFn,
-        handleEvent?: ViewHandleEventFn, viewFlags: ViewFlags = ViewFlags.None): ViewDefinition {
-      return viewDef(viewFlags, nodes, updateDirectives, updateRenderer, handleEvent);
+        viewFlags: ViewFlags = ViewFlags.None): ViewDefinition {
+      return viewDef(viewFlags, nodes, updateDirectives, updateRenderer);
     }
 
     function embeddedViewDef(nodes: NodeDef[], update?: ViewUpdateFn): ViewDefinitionFactory {
@@ -30,9 +30,10 @@ export function main() {
       const aCompViewDef = compViewDef(viewNodes);
 
       return [
-        elementDef(NodeFlags.None, null, null, 1 + contentNodes.length, 'acomp'),
-        directiveDef(NodeFlags.None, null, 0, AComp, [], null, null, () => aCompViewDef),
-        ...contentNodes
+        elementDef(
+            NodeFlags.None, null, null, 1 + contentNodes.length, 'acomp', null, null, null, null,
+            () => aCompViewDef),
+        directiveDef(NodeFlags.Component, null, 0, AComp, []), ...contentNodes
       ];
     }
 
@@ -86,7 +87,7 @@ export function main() {
       const {view, rootNodes} = createAndGetRootNodes(compViewDef(hostElDef(
           [
             anchorDef(
-                NodeFlags.HasEmbeddedViews, null, 0, 1, embeddedViewDef([textDef(null, ['a'])])),
+                NodeFlags.EmbeddedViews, null, 0, 1, null, embeddedViewDef([textDef(null, ['a'])])),
             directiveDef(
                 NodeFlags.None, null, 0, CreateViewService, [TemplateRef, ViewContainerRef])
           ],
@@ -103,17 +104,17 @@ export function main() {
     it('should include projected nodes when attaching / detaching embedded views', () => {
       const {view, rootNodes} = createAndGetRootNodes(compViewDef(hostElDef([textDef(0, ['a'])], [
         elementDef(NodeFlags.None, null, null, 1, 'div'),
-        anchorDef(NodeFlags.HasEmbeddedViews, null, 0, 0, embeddedViewDef([
+        anchorDef(NodeFlags.EmbeddedViews, null, 0, 0, null, embeddedViewDef([
                     ngContentDef(null, 0),
                     // The anchor would be added by the compiler after the ngContent
                     anchorDef(NodeFlags.None, null, null, 0),
                   ])),
       ])));
 
-      const componentView = asProviderData(view, 1).componentView;
+      const componentView = asElementData(view, 0).componentView;
       const view0 = Services.createEmbeddedView(componentView, componentView.def.nodes[1]);
 
-      attachEmbeddedView(asElementData(componentView, 1), 0, view0);
+      attachEmbeddedView(view, asElementData(componentView, 1), 0, view0);
       expect(getDOM().childNodes(getDOM().firstChild(rootNodes[0])).length).toBe(3);
       expect(getDOM().childNodes(getDOM().firstChild(rootNodes[0]))[1])
           .toBe(asTextData(view, 2).renderText);

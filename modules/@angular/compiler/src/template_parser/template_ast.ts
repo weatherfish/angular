@@ -6,12 +6,11 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {SecurityContext} from '@angular/core';
+import {SecurityContext, ɵLifecycleHooks as LifecycleHooks} from '@angular/core';
 
 import {CompileDirectiveSummary, CompileProviderMetadata, CompileTokenMetadata} from '../compile_metadata';
 import {AST} from '../expression_parser/ast';
 import {ParseSourceSpan} from '../parse_util';
-import {LifecycleHooks} from '../private_import_core';
 
 /**
  * An Abstract Syntax Tree node representing part of a parsed Angular template.
@@ -63,8 +62,8 @@ export class AttrAst implements TemplateAst {
 export class BoundElementPropertyAst implements TemplateAst {
   constructor(
       public name: string, public type: PropertyBindingType,
-      public securityContext: SecurityContext, public needsRuntimeSecurityContext: boolean,
-      public value: AST, public unit: string, public sourceSpan: ParseSourceSpan) {}
+      public securityContext: SecurityContext, public value: AST, public unit: string,
+      public sourceSpan: ParseSourceSpan) {}
   visit(visitor: TemplateAstVisitor, context: any): any {
     return visitor.visitElementProperty(this, context);
   }
@@ -109,7 +108,7 @@ export class ReferenceAst implements TemplateAst {
 }
 
 /**
- * A variable declaration on a <template> (e.g. `var-someName="someLocalName"`).
+ * A variable declaration on a <ng-template> (e.g. `var-someName="someLocalName"`).
  */
 export class VariableAst implements TemplateAst {
   constructor(public name: string, public value: string, public sourceSpan: ParseSourceSpan) {}
@@ -136,7 +135,7 @@ export class ElementAst implements TemplateAst {
 }
 
 /**
- * A `<template>` element included in an Angular template.
+ * A `<ng-template>` element included in an Angular template.
  */
 export class EmbeddedTemplateAst implements TemplateAst {
   constructor(

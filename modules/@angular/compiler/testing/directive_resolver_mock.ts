@@ -6,10 +6,8 @@
  * found in the LICENSE file at https://angular.io/license
  */
 import {DirectiveResolver} from '@angular/compiler';
-import {AnimationEntryMetadata, Compiler, Component, Directive, Injectable, Injector, Provider, Type, resolveForwardRef} from '@angular/core';
-
+import {Compiler, Component, Directive, Injectable, Injector, Provider, Type, resolveForwardRef, ɵViewMetadata as ViewMetadata} from '@angular/core';
 import {isPresent} from './facade/lang';
-import {ViewMetadata} from './private_import_core';
 
 
 
@@ -24,7 +22,6 @@ export class MockDirectiveResolver extends DirectiveResolver {
   private _viewProviderOverrides = new Map<Type<any>, any[]>();
   private _views = new Map<Type<any>, ViewMetadata>();
   private _inlineTemplates = new Map<Type<any>, string>();
-  private _animations = new Map<Type<any>, AnimationEntryMetadata[]>();
 
   constructor(private _injector: Injector) { super(); }
 
@@ -64,11 +61,6 @@ export class MockDirectiveResolver extends DirectiveResolver {
 
       let animations = view.animations;
       let templateUrl = view.templateUrl;
-
-      const inlineAnimations = this._animations.get(type);
-      if (isPresent(inlineAnimations)) {
-        animations = inlineAnimations;
-      }
 
       let inlineTemplate = this._inlineTemplates.get(type);
       if (isPresent(inlineTemplate)) {
@@ -140,11 +132,6 @@ export class MockDirectiveResolver extends DirectiveResolver {
    */
   setInlineTemplate(component: Type<any>, template: string): void {
     this._inlineTemplates.set(component, template);
-    this._clearCacheFor(component);
-  }
-
-  setAnimations(component: Type<any>, animations: AnimationEntryMetadata[]): void {
-    this._animations.set(component, animations);
     this._clearCacheFor(component);
   }
 }

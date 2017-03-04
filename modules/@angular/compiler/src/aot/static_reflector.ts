@@ -6,11 +6,8 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {Attribute, Component, ContentChild, ContentChildren, Directive, Host, HostBinding, HostListener, Inject, Injectable, Input, NgModule, Optional, Output, Pipe, Self, SkipSelf, ViewChild, ViewChildren, animate, group, keyframes, sequence, state, style, transition, trigger} from '@angular/core';
-
-import {ReflectorReader} from '../private_import_core';
+import {Attribute, Component, ContentChild, ContentChildren, Directive, Host, HostBinding, HostListener, Inject, Injectable, Input, NgModule, Optional, Output, Pipe, Self, SkipSelf, ViewChild, ViewChildren, animate, group, keyframes, sequence, state, style, transition, trigger, ɵReflectorReader} from '@angular/core';
 import {syntaxError} from '../util';
-
 import {StaticSymbol} from './static_symbol';
 import {StaticSymbolResolver} from './static_symbol_resolver';
 
@@ -18,11 +15,19 @@ const ANGULAR_CORE = '@angular/core';
 
 const HIDDEN_KEY = /^\$.*\$$/;
 
+const IGNORE = {
+  __symbolic: 'ignore'
+};
+
+function shouldIgnore(value: any): boolean {
+  return value && value.__symbolic == 'ignore';
+}
+
 /**
  * A static reflector implements enough of the Reflector API that is necessary to compile
  * templates statically.
  */
-export class StaticReflector implements ReflectorReader {
+export class StaticReflector implements ɵReflectorReader {
   private annotationCache = new Map<StaticSymbol, any[]>();
   private propertyCache = new Map<StaticSymbol, {[key: string]: any[]}>();
   private parameterCache = new Map<StaticSymbol, any[]>();
@@ -335,7 +340,8 @@ export class StaticReflector implements ReflectorReader {
             if (value && (depth != 0 || value.__symbolic != 'error')) {
               const parameters: string[] = targetFunction['parameters'];
               const defaults: any[] = targetFunction.defaults;
-              args = args.map(arg => simplifyInContext(context, arg, depth + 1));
+              args = args.map(arg => simplifyInContext(context, arg, depth + 1))
+                         .map(arg => shouldIgnore(arg) ? undefined : arg);
               if (defaults && defaults.length > args.length) {
                 args.push(...defaults.slice(args.length).map((value: any) => simplify(value)));
               }
@@ -362,7 +368,7 @@ export class StaticReflector implements ReflectorReader {
           // If depth is 0 we are evaluating the top level expression that is describing element
           // decorator. In this case, it is a decorator we don't understand, such as a custom
           // non-angular decorator, and we should just ignore it.
-          return {__symbolic: 'ignore'};
+          return IGNORE;
         }
         return simplify(
             {__symbolic: 'error', message: 'Function call not supported', context: functionSymbol});
@@ -529,7 +535,8 @@ export class StaticReflector implements ReflectorReader {
                   let converter = self.conversionMap.get(staticSymbol);
                   if (converter) {
                     const args =
-                        argExpressions.map(arg => simplifyInContext(context, arg, depth + 1));
+                        argExpressions.map(arg => simplifyInContext(context, arg, depth + 1))
+                            .map(arg => shouldIgnore(arg) ? undefined : arg);
                     return converter(context, args);
                   } else {
                     // Determine if the function is one we can simplify.
@@ -543,16 +550,22 @@ export class StaticReflector implements ReflectorReader {
                 if (expression['line']) {
                   message =
                       `${message} (position ${expression['line']+1}:${expression['character']+1} in the original .ts file)`;
-                  throw positionalError(
-                      message, context.filePath, expression['line'], expression['character']);
+                  self.reportError(
+                      positionalError(
+                          message, context.filePath, expression['line'], expression['character']),
+                      context);
+                } else {
+                  self.reportError(new Error(message), context);
                 }
-                throw new Error(message);
+                return IGNORE;
+              case 'ignore':
+                return expression;
             }
             return null;
           }
           return mapStringMap(expression, (value, name) => simplify(value));
         }
-        return null;
+        return IGNORE;
       }
 
       try {
@@ -676,10 +689,6 @@ class PopulatedScope extends BindingScope {
   resolve(name: string): any {
     return this.bindings.has(name) ? this.bindings.get(name) : BindingScope.missing;
   }
-}
-
-function shouldIgnore(value: any): boolean {
-  return value && value.__symbolic == 'ignore';
 }
 
 function positionalError(message: string, fileName: string, line: number, column: number): Error {

@@ -6,7 +6,8 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {APP_INITIALIZER, CUSTOM_ELEMENTS_SCHEMA, Compiler, Component, Directive, ErrorHandler, Inject, Input, LOCALE_ID, NgModule, OnDestroy, PLATFORM_INITIALIZER, Pipe, Provider, VERSION, createPlatformFactory} from '@angular/core';
+import {isPlatformBrowser} from '@angular/common';
+import {APP_INITIALIZER, CUSTOM_ELEMENTS_SCHEMA, Compiler, Component, Directive, ErrorHandler, Inject, Input, LOCALE_ID, NgModule, OnDestroy, PLATFORM_ID, PLATFORM_INITIALIZER, Pipe, Provider, VERSION, createPlatformFactory} from '@angular/core';
 import {ApplicationRef, destroyPlatform} from '@angular/core/src/application_ref';
 import {Console} from '@angular/core/src/console';
 import {ComponentRef} from '@angular/core/src/linker/component_factory';
@@ -222,6 +223,15 @@ export function main() {
       expect(refPromise).not.toBe(null);
     });
 
+    it('should set platform name to browser',
+       inject([AsyncTestCompleter], (async: AsyncTestCompleter) => {
+         const refPromise = bootstrap(HelloRootCmp, testProviders);
+         refPromise.then((ref) => {
+           expect(isPlatformBrowser(ref.injector.get(PLATFORM_ID))).toBe(true);
+           async.done();
+         });
+       }));
+
     it('should display hello world', inject([AsyncTestCompleter], (async: AsyncTestCompleter) => {
          const refPromise = bootstrap(HelloRootCmp, testProviders);
          refPromise.then((ref) => {
@@ -332,6 +342,44 @@ export function main() {
          log.clear();
          p.bootstrapModule(SomeModule).then(() => {
            expect(log.result()).toEqual('app_init1; app_init2');
+           async.done();
+         });
+       }));
+
+    it('should remove styles when transitioning from a server render',
+       inject([AsyncTestCompleter], (async: AsyncTestCompleter) => {
+
+         @Component({
+           selector: 'root',
+           template: 'root',
+         })
+         class RootCmp {
+         }
+
+         @NgModule({
+           bootstrap: [RootCmp],
+           declarations: [RootCmp],
+           imports: [BrowserModule.withServerTransition({appId: 'my-app'})],
+         })
+         class TestModule {
+         }
+
+         // First, set up styles to be removed.
+         const dom = getDOM();
+         const platform = platformBrowserDynamic();
+         const document = platform.injector.get(DOCUMENT);
+         const style = dom.createElement('style', document);
+         dom.setAttribute(style, 'ng-transition', 'my-app');
+         dom.appendChild(document.head, style);
+
+         const root = dom.createElement('root', document);
+         dom.appendChild(document.body, root);
+
+         platform.bootstrapModule(TestModule).then(() => {
+           const styles: HTMLElement[] =
+               Array.prototype.slice.apply(dom.getElementsByTagName(document, 'style') || []);
+           styles.forEach(
+               style => { expect(dom.getAttribute(style, 'ng-transition')).not.toBe('my-app'); });
            async.done();
          });
        }));

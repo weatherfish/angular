@@ -6,14 +6,14 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {ChangeDetectionStrategy, ComponentFactory, RendererTypeV2, SchemaMetadata, Type, ViewEncapsulation} from '@angular/core';
+import {ChangeDetectionStrategy, ComponentFactory, RendererTypeV2, SchemaMetadata, Type, ViewEncapsulation, ɵLifecycleHooks, ɵreflector} from '@angular/core';
 
 import {StaticSymbol} from './aot/static_symbol';
 import {ListWrapper} from './facade/collection';
 import {isPresent, stringify} from './facade/lang';
-import {LifecycleHooks, reflector} from './private_import_core';
 import {CssSelector} from './selector';
 import {splitAtColon} from './util';
+
 
 
 // group 0: "[prop] or (event) or @trigger"
@@ -110,7 +110,7 @@ export function identifierModuleUrl(compileIdentifier: CompileIdentifierMetadata
   if (ref instanceof StaticSymbol) {
     return ref.filePath;
   }
-  return reflector.importUri(ref);
+  return ɵreflector.importUri(ref);
 }
 
 export function viewClassName(compType: any, embeddedTemplateIndex: number): string {
@@ -203,7 +203,7 @@ export interface CompileTokenMetadata {
  */
 export interface CompileTypeMetadata extends CompileIdentifierMetadata {
   diDeps: CompileDiDependencyMetadata[];
-  lifecycleHooks: LifecycleHooks[];
+  lifecycleHooks: ɵLifecycleHooks[];
   reference: any;
 }
 
@@ -250,7 +250,7 @@ export class CompileTemplateMetadata {
   styles: string[];
   styleUrls: string[];
   externalStylesheets: CompileStylesheetMetadata[];
-  animations: CompileAnimationEntryMetadata[];
+  animations: any[];
   ngContentSelectors: string[];
   interpolation: [string, string];
   constructor(
@@ -263,7 +263,7 @@ export class CompileTemplateMetadata {
         styleUrls?: string[],
         externalStylesheets?: CompileStylesheetMetadata[],
         ngContentSelectors?: string[],
-        animations?: CompileAnimationEntryMetadata[],
+        animations?: any[],
         interpolation?: [string, string],
       } = {}) {
     this.encapsulation = encapsulation;
@@ -313,7 +313,6 @@ export interface CompileDirectiveSummary extends CompileTypeSummary {
   entryComponents: CompileEntryComponentMetadata[];
   changeDetection: ChangeDetectionStrategy;
   template: CompileTemplateSummary;
-  wrapperType: StaticSymbol|ProxyClass;
   componentViewType: StaticSymbol|ProxyClass;
   rendererType: StaticSymbol|RendererTypeV2;
   componentFactory: StaticSymbol|ComponentFactory<any>;
@@ -325,8 +324,8 @@ export interface CompileDirectiveSummary extends CompileTypeSummary {
 export class CompileDirectiveMetadata {
   static create(
       {isHost, type, isComponent, selector, exportAs, changeDetection, inputs, outputs, host,
-       providers, viewProviders, queries, viewQueries, entryComponents, template, wrapperType,
-       componentViewType, rendererType, componentFactory}: {
+       providers, viewProviders, queries, viewQueries, entryComponents, template, componentViewType,
+       rendererType, componentFactory}: {
         isHost?: boolean,
         type?: CompileTypeMetadata,
         isComponent?: boolean,
@@ -342,7 +341,6 @@ export class CompileDirectiveMetadata {
         viewQueries?: CompileQueryMetadata[],
         entryComponents?: CompileEntryComponentMetadata[],
         template?: CompileTemplateMetadata,
-        wrapperType?: StaticSymbol|ProxyClass,
         componentViewType?: StaticSymbol|ProxyClass,
         rendererType?: StaticSymbol|RendererTypeV2,
         componentFactory?: StaticSymbol|ComponentFactory<any>,
@@ -397,7 +395,6 @@ export class CompileDirectiveMetadata {
       viewQueries,
       entryComponents,
       template,
-      wrapperType,
       componentViewType,
       rendererType,
       componentFactory,
@@ -422,16 +419,14 @@ export class CompileDirectiveMetadata {
 
   template: CompileTemplateMetadata;
 
-  wrapperType: StaticSymbol|ProxyClass;
   componentViewType: StaticSymbol|ProxyClass;
   rendererType: StaticSymbol|RendererTypeV2;
   componentFactory: StaticSymbol|ComponentFactory<any>;
 
-  constructor({isHost,          type,      isComponent,   selector,          exportAs,
-               changeDetection, inputs,    outputs,       hostListeners,     hostProperties,
-               hostAttributes,  providers, viewProviders, queries,           viewQueries,
-               entryComponents, template,  wrapperType,   componentViewType, rendererType,
-               componentFactory}: {
+  constructor({isHost,          type,      isComponent,       selector,      exportAs,
+               changeDetection, inputs,    outputs,           hostListeners, hostProperties,
+               hostAttributes,  providers, viewProviders,     queries,       viewQueries,
+               entryComponents, template,  componentViewType, rendererType,  componentFactory}: {
     isHost?: boolean,
     type?: CompileTypeMetadata,
     isComponent?: boolean,
@@ -449,7 +444,6 @@ export class CompileDirectiveMetadata {
     viewQueries?: CompileQueryMetadata[],
     entryComponents?: CompileEntryComponentMetadata[],
     template?: CompileTemplateMetadata,
-    wrapperType?: StaticSymbol|ProxyClass,
     componentViewType?: StaticSymbol|ProxyClass,
     rendererType?: StaticSymbol|RendererTypeV2,
     componentFactory?: StaticSymbol|ComponentFactory<any>,
@@ -472,7 +466,6 @@ export class CompileDirectiveMetadata {
     this.entryComponents = _normalizeArray(entryComponents);
     this.template = template;
 
-    this.wrapperType = wrapperType;
     this.componentViewType = componentViewType;
     this.rendererType = rendererType;
     this.componentFactory = componentFactory;
@@ -497,7 +490,6 @@ export class CompileDirectiveMetadata {
       entryComponents: this.entryComponents,
       changeDetection: this.changeDetection,
       template: this.template && this.template.toSummary(),
-      wrapperType: this.wrapperType,
       componentViewType: this.componentViewType,
       rendererType: this.rendererType,
       componentFactory: this.componentFactory

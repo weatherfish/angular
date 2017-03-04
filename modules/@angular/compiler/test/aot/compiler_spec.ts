@@ -6,14 +6,12 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {AotCompiler, AotCompilerHost, createAotCompiler} from '@angular/compiler';
-import {RenderComponentType} from '@angular/core';
+import {AotCompiler, AotCompilerHost, AotCompilerOptions, createAotCompiler} from '@angular/compiler';
+import {RenderComponentType, ɵReflectionCapabilities as ReflectionCapabilities, ɵreflector as reflector} from '@angular/core';
 import {async} from '@angular/core/testing';
 import {MetadataBundler, MetadataCollector, ModuleMetadata, privateEntriesToIndex} from '@angular/tsc-wrapped';
 import * as path from 'path';
 import * as ts from 'typescript';
-
-import {ReflectionCapabilities, reflector} from './private_import_core';
 import {EmittingCompilerHost, MockAotCompilerHost, MockCompilerHost, MockData, MockMetadataBundlerHost, settings} from './test_util';
 
 const DTS = /\.d\.ts$/;
@@ -25,7 +23,6 @@ const minCoreIndex = `
   export * from './src/di/metadata';
   export * from './src/di/injector';
   export * from './src/di/injection_token';
-  export * from './src/animation/metadata';
   export * from './src/linker';
   export * from './src/render';
   export * from './src/codegen_private_exports';
@@ -203,11 +200,12 @@ function summaryCompile(
 
 function compile(
     host: MockCompilerHost, aotHost: AotCompilerHost, preCompile?: (program: ts.Program) => void,
-    postCompile: (program: ts.Program) => void = expectNoDiagnostics) {
+    postCompile: (program: ts.Program) => void = expectNoDiagnostics,
+    options: AotCompilerOptions = {}) {
   const scripts = host.scriptNames.slice(0);
   const program = ts.createProgram(scripts, settings, host);
   if (preCompile) preCompile(program);
-  const {compiler, reflector} = createAotCompiler(aotHost, {});
+  const {compiler, reflector} = createAotCompiler(aotHost, options);
   return compiler.compileAll(program.getSourceFiles().map(sf => sf.fileName))
       .then(generatedFiles => {
         generatedFiles.forEach(

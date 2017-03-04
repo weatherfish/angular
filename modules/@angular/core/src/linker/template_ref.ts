@@ -7,17 +7,16 @@
  */
 
 import {ElementRef} from './element_ref';
-import {AppView} from './view';
 import {EmbeddedViewRef} from './view_ref';
 
 
 /**
  * Represents an Embedded Template that can be used to instantiate Embedded Views.
  *
- * You can access a `TemplateRef`, in two ways. Via a directive placed on a `<template>` element (or
- * directive prefixed with `*`) and have the `TemplateRef` for this Embedded View injected into the
- * constructor of the directive using the `TemplateRef` Token. Alternatively you can query for the
- * `TemplateRef` from a Component or a Directive via {@link Query}.
+ * You can access a `TemplateRef`, in two ways. Via a directive placed on a `<ng-template>` element
+ * (or directive prefixed with `*`) and have the `TemplateRef` for this Embedded View injected into
+ * the constructor of the directive using the `TemplateRef` Token. Alternatively you can query for
+ * the `TemplateRef` from a Component or a Directive via {@link Query}.
  *
  * To instantiate Embedded Views based on a Template, use
  * {@link ViewContainerRef#createEmbeddedView}, which will create the View and attach it to the
@@ -40,23 +39,4 @@ export abstract class TemplateRef<C> {
   abstract get elementRef(): ElementRef;
 
   abstract createEmbeddedView(context: C): EmbeddedViewRef<C>;
-}
-
-/**
- * workaround https://github.com/angular/tsickle/issues/350
- * @suppress {checkTypes}
- */
-export class TemplateRef_<C> extends TemplateRef<C> {
-  constructor(
-      private _parentView: AppView<any>, private _nodeIndex: number, private _nativeElement: any) {
-    super();
-  }
-
-  createEmbeddedView(context: C): EmbeddedViewRef<C> {
-    const view = this._parentView.createEmbeddedViewInternal(this._nodeIndex);
-    view.create(context || <any>{});
-    return view.ref;
-  }
-
-  get elementRef(): ElementRef { return new ElementRef(this._nativeElement); }
 }

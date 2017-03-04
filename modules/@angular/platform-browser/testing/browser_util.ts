@@ -7,9 +7,9 @@
  */
 
 import {NgZone} from '@angular/core';
+import {ɵgetDOM as getDOM} from '@angular/platform-browser';
 
 import {global} from './facade/lang';
-import {getDOM} from './private_import_platform-browser';
 
 export let browserDetection: BrowserDetection;
 
@@ -74,8 +74,7 @@ export class BrowserDetection {
 
 BrowserDetection.setup();
 
-export function dispatchEvent(
-    element: any /** TODO #9100 */, eventType: any /** TODO #9100 */): void {
+export function dispatchEvent(element: any, eventType: any): void {
   getDOM().dispatchEvent(element, getDOM().createEvent(eventType));
 }
 

@@ -16,7 +16,7 @@ export * from './version';
 export * from './util';
 export * from './di';
 export {createPlatform, assertPlatform, destroyPlatform, getPlatform, PlatformRef, ApplicationRef, enableProdMode, isDevMode, createPlatformFactory, NgProbeToken} from './application_ref';
-export {APP_ID, PACKAGE_ROOT_URL, PLATFORM_INITIALIZER, APP_BOOTSTRAP_LISTENER} from './application_tokens';
+export {APP_ID, PACKAGE_ROOT_URL, PLATFORM_INITIALIZER, PLATFORM_ID, APP_BOOTSTRAP_LISTENER} from './application_tokens';
 export {APP_INITIALIZER, ApplicationInitStatus} from './application_init';
 export * from './zone';
 export * from './render';
@@ -32,11 +32,31 @@ export {Type} from './type';
 export {EventEmitter} from './facade/async';
 export {ErrorHandler} from './error_handler';
 export * from './core_private_export';
-export * from './animation/metadata';
-export {AnimationTransitionEvent} from './animation/animation_transition_event';
-export {AnimationPlayer} from './animation/animation_player';
-export {AnimationStyles} from './animation/animation_styles';
-export {AnimationKeyframe} from './animation/animation_keyframe';
 export {Sanitizer, SecurityContext} from './security';
-export {TransitionFactory, TransitionInstruction, Trigger} from './triggers';
 export * from './codegen_private_exports';
+
+export * from './animation/animation_metadata_wrapped';
+import {AnimationTriggerMetadata} from './animation/animation_metadata_wrapped';
+
+
+// For backwards compatibility.
+/**
+ * @deprecated from v4
+ */
+export type AnimationEntryMetadata = any;
+/**
+ * @deprecated from v4
+ */
+export type AnimationStateTransitionMetadata = any;
+/**
+ * @deprecated from v4
+ */
+export type AnimationPlayer = any;
+/**
+ * @deprecated from v4
+ */
+export type AnimationStyles = any;
+/**
+ * @deprecated from v4
+ */
+export type AnimationKeyframe = any;

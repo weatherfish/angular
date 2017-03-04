@@ -11,69 +11,6 @@ import {filterQueryId} from '@angular/core/src/view/util';
 
 export function main() {
   describe('viewDef', () => {
-    describe('reverseChild order', () => {
-      function reverseChildOrder(viewDef: ViewDefinition): number[] {
-        return viewDef.reverseChildNodes.map(node => node.index);
-      }
-
-      it('should reverse child order for root nodes', () => {
-        const vd = viewDef(ViewFlags.None, [
-          textDef(null, ['a']),  // level 0, index 0
-          textDef(null, ['a']),  // level 0, index 0
-        ]);
-
-        expect(reverseChildOrder(vd)).toEqual([1, 0]);
-      });
-
-      it('should reverse child order for one level, one root', () => {
-        const vd = viewDef(ViewFlags.None, [
-          elementDef(NodeFlags.None, null, null, 2, 'span'),  // level 0, index 0
-          textDef(null, ['a']),                               // level 1, index 1
-          textDef(null, ['a']),                               // level 1, index 2
-        ]);
-
-        expect(reverseChildOrder(vd)).toEqual([0, 2, 1]);
-      });
-
-      it('should reverse child order for 1 level, 2 roots', () => {
-        const vd = viewDef(ViewFlags.None, [
-          elementDef(NodeFlags.None, null, null, 2, 'span'),  // level 0, index 0
-          textDef(null, ['a']),                               // level 1, index 1
-          textDef(null, ['a']),                               // level 1, index 2
-          elementDef(NodeFlags.None, null, null, 1, 'span'),  // level 0, index 3
-          textDef(null, ['a']),                               // level 1, index 4
-        ]);
-
-        expect(reverseChildOrder(vd)).toEqual([3, 4, 0, 2, 1]);
-      });
-
-      it('should reverse child order for 2 levels', () => {
-        const vd = viewDef(ViewFlags.None, [
-          elementDef(NodeFlags.None, null, null, 4, 'span'),  // level 0, index 0
-          elementDef(NodeFlags.None, null, null, 1, 'span'),  // level 1, index 1
-          textDef(null, ['a']),                               // level 2, index 2
-          elementDef(NodeFlags.None, null, null, 1, 'span'),  // level 1, index 3
-          textDef(null, ['a']),                               // level 2, index 4
-        ]);
-
-        expect(reverseChildOrder(vd)).toEqual([0, 3, 4, 1, 2]);
-      });
-
-      it('should reverse child order for mixed levels', () => {
-        const vd = viewDef(ViewFlags.None, [
-          textDef(null, ['a']),                               // level 0, index 0
-          elementDef(NodeFlags.None, null, null, 5, 'span'),  // level 0, index 1
-          textDef(null, ['a']),                               // level 1, index 2
-          elementDef(NodeFlags.None, null, null, 1, 'span'),  // level 1, index 3
-          textDef(null, ['a']),                               // level 2, index 4
-          elementDef(NodeFlags.None, null, null, 1, 'span'),  // level 1, index 5
-          textDef(null, ['a']),                               // level 2, index 6
-          textDef(null, ['a']),                               // level 0, index 7
-        ]);
-
-        expect(reverseChildOrder(vd)).toEqual([7, 1, 5, 6, 3, 4, 2, 0]);
-      });
-    });
 
     describe('parent', () => {
       function parents(viewDef: ViewDefinition): number[] {
@@ -122,13 +59,23 @@ export function main() {
         return viewDef.nodes.map(node => node.childFlags);
       }
 
+      function directChildFlags(viewDef: ViewDefinition): number[] {
+        return viewDef.nodes.map(node => node.directChildFlags);
+      }
+
       it('should calculate childFlags for one level', () => {
         const vd = viewDef(ViewFlags.None, [
           elementDef(NodeFlags.None, null, null, 1, 'span'),
           directiveDef(NodeFlags.AfterContentChecked, null, 0, AService, [])
         ]);
 
-        expect(childFlags(vd)).toEqual([NodeFlags.AfterContentChecked, NodeFlags.None]);
+        expect(childFlags(vd)).toEqual([
+          NodeFlags.TypeDirective | NodeFlags.AfterContentChecked, NodeFlags.None
+        ]);
+
+        expect(directChildFlags(vd)).toEqual([
+          NodeFlags.TypeDirective | NodeFlags.AfterContentChecked, NodeFlags.None
+        ]);
       });
 
       it('should calculate childFlags for two levels', () => {
@@ -139,7 +86,13 @@ export function main() {
         ]);
 
         expect(childFlags(vd)).toEqual([
-          NodeFlags.AfterContentChecked, NodeFlags.AfterContentChecked, NodeFlags.None
+          NodeFlags.TypeElement | NodeFlags.TypeDirective | NodeFlags.AfterContentChecked,
+          NodeFlags.TypeDirective | NodeFlags.AfterContentChecked, NodeFlags.None
+        ]);
+
+        expect(directChildFlags(vd)).toEqual([
+          NodeFlags.TypeElement, NodeFlags.TypeDirective | NodeFlags.AfterContentChecked,
+          NodeFlags.None
         ]);
       });
 
@@ -153,8 +106,15 @@ export function main() {
         ]);
 
         expect(childFlags(vd)).toEqual([
-          NodeFlags.AfterContentChecked, NodeFlags.None,
-          NodeFlags.AfterContentInit | NodeFlags.AfterViewChecked, NodeFlags.None, NodeFlags.None
+          NodeFlags.TypeDirective | NodeFlags.AfterContentChecked, NodeFlags.None,
+          NodeFlags.TypeDirective | NodeFlags.AfterContentInit | NodeFlags.AfterViewChecked,
+          NodeFlags.None, NodeFlags.None
+        ]);
+
+        expect(directChildFlags(vd)).toEqual([
+          NodeFlags.TypeDirective | NodeFlags.AfterContentChecked, NodeFlags.None,
+          NodeFlags.TypeDirective | NodeFlags.AfterContentInit | NodeFlags.AfterViewChecked,
+          NodeFlags.None, NodeFlags.None
         ]);
       });
 
@@ -169,8 +129,17 @@ export function main() {
         ]);
 
         expect(childFlags(vd)).toEqual([
-          NodeFlags.AfterContentChecked, NodeFlags.AfterContentChecked, NodeFlags.None,
-          NodeFlags.AfterContentInit | NodeFlags.AfterViewInit, NodeFlags.None, NodeFlags.None
+          NodeFlags.TypeElement | NodeFlags.TypeDirective | NodeFlags.AfterContentChecked,
+          NodeFlags.TypeDirective | NodeFlags.AfterContentChecked, NodeFlags.None,
+          NodeFlags.TypeDirective | NodeFlags.AfterContentInit | NodeFlags.AfterViewInit,
+          NodeFlags.None, NodeFlags.None
+        ]);
+
+        expect(directChildFlags(vd)).toEqual([
+          NodeFlags.TypeElement, NodeFlags.TypeDirective | NodeFlags.AfterContentChecked,
+          NodeFlags.None,
+          NodeFlags.TypeDirective | NodeFlags.AfterContentInit | NodeFlags.AfterViewInit,
+          NodeFlags.None, NodeFlags.None
         ]);
       });
     });
@@ -232,7 +201,7 @@ export function main() {
         const vd = viewDef(ViewFlags.None, [
           elementDef(NodeFlags.None, null, null, 1, 'span'),
           anchorDef(
-              NodeFlags.None, null, null, 0,
+              NodeFlags.None, null, null, 0, null,
               () => viewDef(
                   ViewFlags.None,
                   [

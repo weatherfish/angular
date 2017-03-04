@@ -17,8 +17,8 @@ export function main() {
   describe('View Services', () => {
     function compViewDef(
         nodes: NodeDef[], updateDirectives?: ViewUpdateFn, updateRenderer?: ViewUpdateFn,
-        handleEvent?: ViewHandleEventFn, viewFlags: ViewFlags = ViewFlags.None): ViewDefinition {
-      return viewDef(viewFlags, nodes, updateDirectives, updateRenderer, handleEvent);
+        viewFlags: ViewFlags = ViewFlags.None): ViewDefinition {
+      return viewDef(viewFlags, nodes, updateDirectives, updateRenderer);
     }
 
     function createAndGetRootNodes(
@@ -35,20 +35,20 @@ export function main() {
 
       function createViewWithData() {
         const {view} = createAndGetRootNodes(compViewDef([
-          elementDef(NodeFlags.None, null, null, 1, 'div'),
-          directiveDef(
-              NodeFlags.None, null, 0, AComp, [], null, null,
+          elementDef(
+              NodeFlags.None, null, null, 1, 'div', null, null, null, null,
               () => compViewDef([
                 elementDef(NodeFlags.None, [['ref', QueryValueType.ElementRef]], null, 2, 'span'),
                 directiveDef(NodeFlags.None, null, 0, AService, []), textDef(null, ['a'])
               ])),
+          directiveDef(NodeFlags.Component, null, 0, AComp, []),
         ]));
         return view;
       }
 
       it('should provide data for elements', () => {
         const view = createViewWithData();
-        const compView = asProviderData(view, 1).componentView;
+        const compView = asElementData(view, 0).componentView;
 
         const debugCtx = Services.createDebugContext(compView, 0);
 
@@ -65,7 +65,7 @@ export function main() {
 
       it('should provide data for text nodes', () => {
         const view = createViewWithData();
-        const compView = asProviderData(view, 1).componentView;
+        const compView = asElementData(view, 0).componentView;
 
         const debugCtx = Services.createDebugContext(compView, 2);
 
@@ -79,7 +79,7 @@ export function main() {
 
       it('should provide data for other nodes based on the nearest element parent', () => {
         const view = createViewWithData();
-        const compView = asProviderData(view, 1).componentView;
+        const compView = asElementData(view, 0).componentView;
 
         const debugCtx = Services.createDebugContext(compView, 1);
 

@@ -6,7 +6,6 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {NoOpAnimationPlayer} from '../animation/animation_player';
 import {ApplicationRef} from '../application_ref';
 import {ChangeDetectorRef} from '../change_detection/change_detection';
 import {Injector} from '../di';
@@ -14,13 +13,14 @@ import {ComponentFactory, ComponentRef} from '../linker/component_factory';
 import {ElementRef} from '../linker/element_ref';
 import {TemplateRef} from '../linker/template_ref';
 import {ViewContainerRef} from '../linker/view_container_ref';
-import {EmbeddedViewRef, ViewRef} from '../linker/view_ref';
+import {EmbeddedViewRef, InternalViewRef, ViewRef} from '../linker/view_ref';
 import {Renderer as RendererV1, RendererV2} from '../render/api';
 import {Type} from '../type';
 import {VERSION} from '../version';
 
-import {ArgumentType, BindingType, DebugContext, DepFlags, ElementData, NodeCheckFn, NodeData, NodeDef, NodeFlags, NodeType, RootData, Services, ViewData, ViewDefinition, ViewDefinitionFactory, ViewState, asElementData, asProviderData, asTextData} from './types';
-import {isComponentView, renderNode, resolveViewDefinition, rootRenderNodes, splitNamespace, tokenKey, viewParentEl} from './util';
+import {ArgumentType, BindingType, DebugContext, DepFlags, ElementData, NodeCheckFn, NodeData, NodeDef, NodeFlags, RootData, Services, ViewData, ViewDefinition, ViewDefinitionFactory, ViewState, asElementData, asProviderData, asTextData} from './types';
+import {isComponentView, markParentViewsForCheck, renderNode, resolveViewDefinition, rootRenderNodes, splitNamespace, tokenKey, viewParentEl} from './util';
+import {attachEmbeddedView, detachEmbeddedView, moveEmbeddedView, renderDetachView} from './view_attach';
 
 const EMPTY_CONTEXT = new Object();
 
@@ -30,9 +30,22 @@ export function createComponentFactory(
   return new ComponentFactory_(selector, componentType, viewDefFactory);
 }
 
+export function getComponentViewDefinitionFactory(componentFactory: ComponentFactory<any>):
+    ViewDefinitionFactory {
+  return (componentFactory as ComponentFactory_).viewDefFactory;
+}
+
 class ComponentFactory_ extends ComponentFactory<any> {
-  constructor(selector: string, componentType: Type<any>, viewDefFactory: ViewDefinitionFactory) {
-    super(selector, <any>viewDefFactory, componentType);
+  /**
+   * @internal
+   */
+  viewDefFactory: ViewDefinitionFactory;
+
+  constructor(
+      public selector: string, public componentType: Type<any>,
+      viewDefFactory: ViewDefinitionFactory) {
+    super();
+    this.viewDefFactory = viewDefFactory;
   }
 
   /**
@@ -41,8 +54,8 @@ class ComponentFactory_ extends ComponentFactory<any> {
   create(
       injector: Injector, projectableNodes: any[][] = null,
       rootSelectorOrNode: string|any = null): ComponentRef<any> {
-    const viewDef = resolveViewDefinition(this._viewClass);
-    const componentNodeIndex = viewDef.nodes[0].element.component.index;
+    const viewDef = resolveViewDefinition(this.viewDefFactory);
+    const componentNodeIndex = viewDef.nodes[0].element.componentProvider.index;
     const view = Services.createRootView(
         injector, projectableNodes || [], rootSelectorOrNode, viewDef, EMPTY_CONTEXT);
     const component = asProviderData(view, componentNodeIndex).instance;
@@ -98,15 +111,19 @@ class ViewContainerRef_ implements ViewContainerRef {
   clear(): void {
     const len = this._data.embeddedViews.length;
     for (let i = len - 1; i >= 0; i--) {
-      const view = Services.detachEmbeddedView(this._data, i);
+      const view = detachEmbeddedView(this._data, i);
       Services.destroyView(view);
     }
   }
 
   get(index: number): ViewRef {
-    const ref = new ViewRef_(this._data.embeddedViews[index]);
-    ref.attachToViewContainerRef(this);
-    return ref;
+    const view = this._data.embeddedViews[index];
+    if (view) {
+      const ref = new ViewRef_(view);
+      ref.attachToViewContainerRef(this);
+      return ref;
+    }
+    return null;
   }
 
   get length(): number { return this._data.embeddedViews.length; };
@@ -130,14 +147,14 @@ class ViewContainerRef_ implements ViewContainerRef {
   insert(viewRef: ViewRef, index?: number): ViewRef {
     const viewRef_ = <ViewRef_>viewRef;
     const viewData = viewRef_._view;
-    Services.attachEmbeddedView(this._data, index, viewData);
+    attachEmbeddedView(this._view, this._data, index, viewData);
     viewRef_.attachToViewContainerRef(this);
     return viewRef;
   }
 
   move(viewRef: ViewRef_, currentIndex: number): ViewRef {
     const previousIndex = this._data.embeddedViews.indexOf(viewRef._view);
-    Services.moveEmbeddedView(this._data, previousIndex, currentIndex);
+    moveEmbeddedView(this._data, previousIndex, currentIndex);
     return viewRef;
   }
 
@@ -146,15 +163,15 @@ class ViewContainerRef_ implements ViewContainerRef {
   }
 
   remove(index?: number): void {
-    const viewData = Services.detachEmbeddedView(this._data, index);
-    Services.destroyView(viewData);
+    const viewData = detachEmbeddedView(this._data, index);
+    if (viewData) {
+      Services.destroyView(viewData);
+    }
   }
 
   detach(index?: number): ViewRef {
-    const view = this.get(index);
-    Services.detachEmbeddedView(this._data, index);
-    (view as ViewRef_).detachFromContainer();
-    return view;
+    const view = detachEmbeddedView(this._data, index);
+    return view ? new ViewRef_(view) : null;
   }
 }
 
@@ -162,7 +179,7 @@ export function createChangeDetectorRef(view: ViewData): ChangeDetectorRef {
   return new ViewRef_(view);
 }
 
-export class ViewRef_ implements EmbeddedViewRef<any> {
+export class ViewRef_ implements EmbeddedViewRef<any>, InternalViewRef {
   /** @internal */
   _view: ViewData;
   private _viewContainerRef: ViewContainerRef;
@@ -180,7 +197,7 @@ export class ViewRef_ implements EmbeddedViewRef<any> {
 
   get destroyed(): boolean { return (this._view.state & ViewState.Destroyed) !== 0; }
 
-  markForCheck(): void { this.reattach(); }
+  markForCheck(): void { markParentViewsForCheck(this._view); }
   detach(): void { this._view.state &= ~ViewState.ChecksEnabled; }
   detectChanges(): void { Services.checkAndUpdateView(this._view); }
   checkNoChanges(): void { Services.checkNoChangesView(this._view); }
@@ -202,9 +219,10 @@ export class ViewRef_ implements EmbeddedViewRef<any> {
     Services.destroyView(this._view);
   }
 
-  detachFromContainer() {
+  detachFromAppRef() {
     this._appRef = null;
-    this._viewContainerRef = null;
+    renderDetachView(this._view);
+    Services.dirtyParentQueries(this._view);
   }
 
   attachToAppRef(appRef: ApplicationRef) {
@@ -226,8 +244,8 @@ export function createTemplateRef(view: ViewData, def: NodeDef): TemplateRef<any
   return new TemplateRef_(view, def);
 }
 
-class TemplateRef_ implements TemplateRef<any> {
-  constructor(private _parentView: ViewData, private _def: NodeDef) {}
+class TemplateRef_ extends TemplateRef<any> {
+  constructor(private _parentView: ViewData, private _def: NodeDef) { super(); }
 
   createEmbeddedView(context: any): EmbeddedViewRef<any> {
     return new ViewRef_(Services.createEmbeddedView(this._parentView, this._def, context));
@@ -245,7 +263,7 @@ export function createInjector(view: ViewData, elDef: NodeDef): Injector {
 class Injector_ implements Injector {
   constructor(private view: ViewData, private elDef: NodeDef) {}
   get(token: any, notFoundValue: any = Injector.THROW_IF_NOT_FOUND): any {
-    const allowPrivateServices = !!this.elDef.element.component;
+    const allowPrivateServices = (this.elDef.flags & NodeFlags.ComponentView) !== 0;
     return Services.resolveDep(
         this.view, this.elDef, allowPrivateServices,
         {flags: DepFlags.None, token, tokenKey: tokenKey(token)}, notFoundValue);
@@ -254,21 +272,18 @@ class Injector_ implements Injector {
 
 export function nodeValue(view: ViewData, index: number): any {
   const def = view.def.nodes[index];
-  switch (def.type) {
-    case NodeType.Element:
-      if (def.element.template) {
-        return createTemplateRef(view, def);
-      } else {
-        return asElementData(view, def.index).renderElement;
-      }
-    case NodeType.Text:
-      return asTextData(view, def.index).renderText;
-    case NodeType.Directive:
-    case NodeType.Pipe:
-    case NodeType.Provider:
-      return asProviderData(view, def.index).instance;
+  if (def.flags & NodeFlags.TypeElement) {
+    if (def.element.template) {
+      return createTemplateRef(view, def);
+    } else {
+      return asElementData(view, def.index).renderElement;
+    }
+  } else if (def.flags & NodeFlags.TypeText) {
+    return asTextData(view, def.index).renderText;
+  } else if (def.flags & (NodeFlags.CatProvider | NodeFlags.TypePipe)) {
+    return asProviderData(view, def.index).instance;
   }
-  return undefined;
+  throw new Error(`Illegal state: read nodeValue for node index ${index}`);
 }
 
 export function createRendererV1(view: ViewData): RendererV1 {
@@ -383,5 +398,5 @@ class RendererAdapter implements RendererV1 {
 
   setText(renderNode: Text, text: string): void { this.delegate.setValue(renderNode, text); }
 
-  animate(): NoOpAnimationPlayer { return new NoOpAnimationPlayer(); }
+  animate(): any { throw new Error('Renderer.animate is no longer supported!'); }
 }

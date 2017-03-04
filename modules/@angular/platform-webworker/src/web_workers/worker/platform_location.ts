@@ -13,10 +13,7 @@ import {EventEmitter} from '../../facade/async';
 import {ClientMessageBroker, ClientMessageBrokerFactory, FnArg, UiArguments} from '../shared/client_message_broker';
 import {MessageBus} from '../shared/message_bus';
 import {ROUTER_CHANNEL} from '../shared/messaging_api';
-import {LocationType} from '../shared/serialized_types';
-import {PRIMITIVE, Serializer} from '../shared/serializer';
-
-import {deserializeGenericEvent} from './event_deserializer';
+import {LocationType, Serializer, SerializerTypes} from '../shared/serializer';
 
 @Injectable()
 export class WebWorkerPlatformLocation extends PlatformLocation {
@@ -30,8 +27,8 @@ export class WebWorkerPlatformLocation extends PlatformLocation {
       brokerFactory: ClientMessageBrokerFactory, bus: MessageBus, private _serializer: Serializer) {
     super();
     this._broker = brokerFactory.createMessageBroker(ROUTER_CHANNEL);
-
     this._channelSource = bus.from(ROUTER_CHANNEL);
+
     this._channelSource.subscribe({
       next: (msg: {[key: string]: any}) => {
         let listeners: Array<Function> = null;
@@ -43,11 +40,10 @@ export class WebWorkerPlatformLocation extends PlatformLocation {
             listeners = this._hashChangeListeners;
           }
 
-          if (listeners !== null) {
-            const e = deserializeGenericEvent(msg['event']);
+          if (listeners) {
             // There was a popState or hashChange event, so the location object thas been updated
             this._location = this._serializer.deserialize(msg['location'], LocationType);
-            listeners.forEach((fn: Function) => fn(e));
+            listeners.forEach((fn: Function) => fn(msg['event']));
           }
         }
       }
@@ -58,14 +54,13 @@ export class WebWorkerPlatformLocation extends PlatformLocation {
   init(): Promise<boolean> {
     const args: UiArguments = new UiArguments('getLocation');
 
-    const locationPromise: Promise<LocationType> = this._broker.runOnService(args, LocationType);
-    return locationPromise.then(
-        (val: LocationType):
-            boolean => {
+    return this._broker.runOnService(args, LocationType)
+        .then(
+            (val: LocationType) => {
               this._location = val;
               return true;
             },
-        (err): boolean => { throw new Error(err); });
+            err => { throw new Error(err); });
   }
 
   getBaseHrefFromDOM(): string {
@@ -77,29 +72,11 @@ export class WebWorkerPlatformLocation extends PlatformLocation {
 
   onHashChange(fn: LocationChangeListener): void { this._hashChangeListeners.push(fn); }
 
-  get pathname(): string {
-    if (this._location === null) {
-      return null;
-    }
+  get pathname(): string { return this._location ? this._location.pathname : null; }
 
-    return this._location.pathname;
-  }
+  get search(): string { return this._location ? this._location.search : null; }
 
-  get search(): string {
-    if (this._location === null) {
-      return null;
-    }
-
-    return this._location.search;
-  }
-
-  get hash(): string {
-    if (this._location === null) {
-      return null;
-    }
-
-    return this._location.hash;
-  }
+  get hash(): string { return this._location ? this._location.hash : null; }
 
   set pathname(newPath: string) {
     if (this._location === null) {
@@ -108,21 +85,27 @@ export class WebWorkerPlatformLocation extends PlatformLocation {
 
     this._location.pathname = newPath;
 
-    const fnArgs = [new FnArg(newPath, PRIMITIVE)];
+    const fnArgs = [new FnArg(newPath, SerializerTypes.PRIMITIVE)];
     const args = new UiArguments('setPathname', fnArgs);
     this._broker.runOnService(args, null);
   }
 
   pushState(state: any, title: string, url: string): void {
-    const fnArgs =
-        [new FnArg(state, PRIMITIVE), new FnArg(title, PRIMITIVE), new FnArg(url, PRIMITIVE)];
+    const fnArgs = [
+      new FnArg(state, SerializerTypes.PRIMITIVE),
+      new FnArg(title, SerializerTypes.PRIMITIVE),
+      new FnArg(url, SerializerTypes.PRIMITIVE),
+    ];
     const args = new UiArguments('pushState', fnArgs);
     this._broker.runOnService(args, null);
   }
 
   replaceState(state: any, title: string, url: string): void {
-    const fnArgs =
-        [new FnArg(state, PRIMITIVE), new FnArg(title, PRIMITIVE), new FnArg(url, PRIMITIVE)];
+    const fnArgs = [
+      new FnArg(state, SerializerTypes.PRIMITIVE),
+      new FnArg(title, SerializerTypes.PRIMITIVE),
+      new FnArg(url, SerializerTypes.PRIMITIVE),
+    ];
     const args = new UiArguments('replaceState', fnArgs);
     this._broker.runOnService(args, null);
   }

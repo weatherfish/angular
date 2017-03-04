@@ -26,8 +26,8 @@ let viewFlags = ViewFlags.None;
 
 function TreeComponent_Host(): ViewDefinition {
   return viewDef(viewFlags, [
-    elementDef(NodeFlags.None, null, null, 1, 'tree'),
-    directiveDef(NodeFlags.None, null, 0, TreeComponent, [], null, null, TreeComponent_0),
+    elementDef(NodeFlags.None, null, null, 1, 'tree', null, null, null, null, TreeComponent_0),
+    directiveDef(NodeFlags.Component, null, 0, TreeComponent, []),
   ]);
 }
 
@@ -35,9 +35,8 @@ function TreeComponent_1() {
   return viewDef(
       viewFlags,
       [
-        elementDef(NodeFlags.None, null, null, 1, 'tree'),
-        directiveDef(
-            NodeFlags.None, null, 0, TreeComponent, [], {data: [0, 'data']}, null, TreeComponent_0),
+        elementDef(NodeFlags.None, null, null, 1, 'tree', null, null, null, null, TreeComponent_0),
+        directiveDef(NodeFlags.Component, null, 0, TreeComponent, [], {data: [0, 'data']}),
       ],
       (check, view) => {
         const cmp = view.component;
@@ -49,9 +48,8 @@ function TreeComponent_2() {
   return viewDef(
       viewFlags,
       [
-        elementDef(NodeFlags.None, null, null, 1, 'tree'),
-        directiveDef(
-            NodeFlags.None, null, 0, TreeComponent, [], {data: [0, 'data']}, null, TreeComponent_0),
+        elementDef(NodeFlags.None, null, null, 1, 'tree', null, null, null, null, TreeComponent_0),
+        directiveDef(NodeFlags.Component, null, 0, TreeComponent, [], {data: [0, 'data']}),
       ],
       (check, view) => {
         const cmp = view.component;
@@ -67,10 +65,10 @@ function TreeComponent_0(): ViewDefinition {
             NodeFlags.None, null, null, 1, 'span', null,
             [[BindingType.ElementStyle, 'backgroundColor', null]]),
         textDef(null, [' ', ' ']),
-        anchorDef(NodeFlags.HasEmbeddedViews, null, null, 1, TreeComponent_1),
+        anchorDef(NodeFlags.EmbeddedViews, null, null, 1, null, TreeComponent_1),
         directiveDef(
             NodeFlags.None, null, 0, NgIf, [ViewContainerRef, TemplateRef], {ngIf: [0, 'ngIf']}),
-        anchorDef(NodeFlags.HasEmbeddedViews, null, null, 1, TreeComponent_2),
+        anchorDef(NodeFlags.EmbeddedViews, null, null, 1, null, TreeComponent_2),
         directiveDef(
             NodeFlags.None, null, 0, NgIf, [ViewContainerRef, TemplateRef], {ngIf: [0, 'ngIf']}),
       ],

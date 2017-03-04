@@ -6,11 +6,10 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {ErrorHandler, Injectable, InjectionToken, Injector, NgZone, PLATFORM_INITIALIZER, PlatformRef, Provider, RootRenderer, Testability, createPlatformFactory, isDevMode, platformCore} from '@angular/core';
-import {AnimationDriver, DOCUMENT, EVENT_MANAGER_PLUGINS, EventManager, HAMMER_GESTURE_CONFIG, HammerGestureConfig} from '@angular/platform-browser';
+import {CommonModule, ɵPLATFORM_WORKER_UI_ID as PLATFORM_WORKER_UI_ID} from '@angular/common';
+import {ErrorHandler, Injectable, InjectionToken, Injector, NgZone, PLATFORM_ID, PLATFORM_INITIALIZER, PlatformRef, Provider, RendererFactoryV2, RootRenderer, Testability, createPlatformFactory, isDevMode, platformCore, ɵAPP_ID_RANDOM_PROVIDER as APP_ID_RANDOM_PROVIDER} from '@angular/core';
+import {DOCUMENT, EVENT_MANAGER_PLUGINS, EventManager, HAMMER_GESTURE_CONFIG, HammerGestureConfig, ɵBROWSER_SANITIZATION_PROVIDERS as BROWSER_SANITIZATION_PROVIDERS, ɵBrowserDomAdapter as BrowserDomAdapter, ɵBrowserGetTestability as BrowserGetTestability, ɵDomEventsPlugin as DomEventsPlugin, ɵDomRendererFactoryV2 as DomRendererFactoryV2, ɵDomSharedStylesHost as DomSharedStylesHost, ɵHammerGesturesPlugin as HammerGesturesPlugin, ɵKeyEventsPlugin as KeyEventsPlugin, ɵSharedStylesHost as SharedStylesHost, ɵgetDOM as getDOM} from '@angular/platform-browser';
 
-import {APP_ID_RANDOM_PROVIDER} from './private_import_core';
-import {BROWSER_SANITIZATION_PROVIDERS, BrowserDomAdapter, BrowserGetTestability, DomEventsPlugin, DomRootRenderer, DomRootRenderer_, DomSharedStylesHost, HammerGesturesPlugin, KeyEventsPlugin, SharedStylesHost, WebAnimationsDriver, getDOM} from './private_import_platform-browser';
 import {ON_WEB_WORKER} from './web_workers/shared/api';
 import {ClientMessageBrokerFactory, ClientMessageBrokerFactory_} from './web_workers/shared/client_message_broker';
 import {MessageBus} from './web_workers/shared/message_bus';
@@ -18,8 +17,7 @@ import {PostMessageBus, PostMessageBusSink, PostMessageBusSource} from './web_wo
 import {RenderStore} from './web_workers/shared/render_store';
 import {Serializer} from './web_workers/shared/serializer';
 import {ServiceMessageBrokerFactory, ServiceMessageBrokerFactory_} from './web_workers/shared/service_message_broker';
-import {MessageBasedRenderer} from './web_workers/ui/renderer';
-
+import {MessageBasedRendererV2} from './web_workers/ui/renderer';
 
 
 /**
@@ -49,16 +47,19 @@ export const WORKER_SCRIPT = new InjectionToken<string>('WebWorkerScript');
  * A multi-provider used to automatically call the `start()` method after the service is
  * created.
  *
- * TODO(vicb): create an interface for startable services to implement
  * @experimental WebWorker support is currently experimental.
  */
 export const WORKER_UI_STARTABLE_MESSAGING_SERVICE =
-    new InjectionToken<MessageBasedRenderer[]>('WorkerRenderStartableMsgService');
+    new InjectionToken<({start: () => void})[]>('WorkerRenderStartableMsgService');
 
 export const _WORKER_UI_PLATFORM_PROVIDERS: Provider[] = [
   {provide: NgZone, useFactory: createNgZone, deps: []},
-  MessageBasedRenderer,
-  {provide: WORKER_UI_STARTABLE_MESSAGING_SERVICE, useExisting: MessageBasedRenderer, multi: true},
+  MessageBasedRendererV2,
+  {
+    provide: WORKER_UI_STARTABLE_MESSAGING_SERVICE,
+    useExisting: MessageBasedRendererV2,
+    multi: true
+  },
   BROWSER_SANITIZATION_PROVIDERS,
   {provide: ErrorHandler, useFactory: _exceptionHandler, deps: []},
   {provide: DOCUMENT, useFactory: _document, deps: []},
@@ -69,12 +70,11 @@ export const _WORKER_UI_PLATFORM_PROVIDERS: Provider[] = [
   {provide: EVENT_MANAGER_PLUGINS, useClass: HammerGesturesPlugin, multi: true},
   {provide: HAMMER_GESTURE_CONFIG, useClass: HammerGestureConfig},
   APP_ID_RANDOM_PROVIDER,
-  {provide: DomRootRenderer, useClass: DomRootRenderer_},
-  {provide: RootRenderer, useExisting: DomRootRenderer},
+  DomRendererFactoryV2,
+  {provide: RendererFactoryV2, useExisting: DomRendererFactoryV2},
   {provide: SharedStylesHost, useExisting: DomSharedStylesHost},
   {provide: ServiceMessageBrokerFactory, useClass: ServiceMessageBrokerFactory_},
   {provide: ClientMessageBrokerFactory, useClass: ClientMessageBrokerFactory_},
-  {provide: AnimationDriver, useFactory: _resolveDefaultAnimationDriver, deps: []},
   Serializer,
   {provide: ON_WEB_WORKER, useValue: false},
   RenderStore,
@@ -88,7 +88,8 @@ export const _WORKER_UI_PLATFORM_PROVIDERS: Provider[] = [
     multi: true,
     deps: [Injector]
   },
-  {provide: MessageBus, useFactory: messageBusFactory, deps: [WebWorkerInstance]}
+  {provide: PLATFORM_ID, useValue: PLATFORM_WORKER_UI_ID},
+  {provide: MessageBus, useFactory: messageBusFactory, deps: [WebWorkerInstance]},
 ];
 
 function initializeGenericWorkerRenderer(injector: Injector) {
@@ -152,11 +153,4 @@ function spawnWebWorker(uri: string, instance: WebWorkerInstance): void {
   const bus = new PostMessageBus(sink, source);
 
   instance.init(webWorker, bus);
-}
-
-function _resolveDefaultAnimationDriver(): AnimationDriver {
-  if (getDOM().supportsWebAnimation()) {
-    return new WebAnimationsDriver();
-  }
-  return AnimationDriver.NOOP;
 }

@@ -6,15 +6,14 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {PlatformLocation} from '@angular/common';
-import {ApplicationRef, CompilerFactory, Component, NgModule, NgModuleRef, NgZone, PlatformRef, destroyPlatform, getPlatform} from '@angular/core';
-import {async, inject} from '@angular/core/testing';
+import {PlatformLocation, isPlatformServer} from '@angular/common';
+import {ApplicationRef, CompilerFactory, Component, NgModule, NgModuleRef, NgZone, PLATFORM_ID, PlatformRef, destroyPlatform, getPlatform} from '@angular/core';
+import {TestBed, async, inject} from '@angular/core/testing';
 import {Http, HttpModule, Response, ResponseOptions, XHRBackend} from '@angular/http';
 import {MockBackend, MockConnection} from '@angular/http/testing';
-import {DOCUMENT} from '@angular/platform-browser';
+import {BrowserModule, DOCUMENT} from '@angular/platform-browser';
 import {getDOM} from '@angular/platform-browser/src/dom/dom_adapter';
 import {INITIAL_CONFIG, PlatformState, ServerModule, platformDynamicServer, renderModule, renderModuleFactory} from '@angular/platform-server';
-
 import {Subscription} from 'rxjs/Subscription';
 import {filter} from 'rxjs/operator/filter';
 import {first} from 'rxjs/operator/first';
@@ -53,8 +52,11 @@ class MyAsyncServerApp {
   }
 }
 
-@NgModule(
-    {declarations: [MyAsyncServerApp], imports: [ServerModule], bootstrap: [MyAsyncServerApp]})
+@NgModule({
+  declarations: [MyAsyncServerApp],
+  imports: [BrowserModule.withServerTransition({appId: 'async-server'}), ServerModule],
+  bootstrap: [MyAsyncServerApp]
+})
 class AsyncServerModule {
 }
 
@@ -62,7 +64,11 @@ class AsyncServerModule {
 class MyStylesApp {
 }
 
-@NgModule({declarations: [MyStylesApp], imports: [ServerModule], bootstrap: [MyStylesApp]})
+@NgModule({
+  declarations: [MyStylesApp],
+  imports: [BrowserModule.withServerTransition({appId: 'example-styles'}), ServerModule],
+  bootstrap: [MyStylesApp]
+})
 class ExampleStylesModule {
 }
 
@@ -111,6 +117,7 @@ export function main() {
              [{provide: INITIAL_CONFIG, useValue: {document: '<app></app>'}}]);
 
          platform.bootstrapModule(ExampleModule).then((moduleRef) => {
+           expect(isPlatformServer(moduleRef.injector.get(PLATFORM_ID))).toBe(true);
            const doc = moduleRef.injector.get(DOCUMENT);
            expect(getDOM().getText(doc)).toEqual('Works!');
            platform.destroy();
@@ -138,16 +145,18 @@ export function main() {
          });
        }));
 
-    it('adds styles to the root component', async(() => {
-         const platform = platformDynamicServer(
-             [{provide: INITIAL_CONFIG, useValue: {document: '<app></app>'}}]);
+    it('adds styles with ng-transition attribute', async(() => {
+         const platform = platformDynamicServer([{
+           provide: INITIAL_CONFIG,
+           useValue: {document: '<html><head></head><body><app></app></body></html>'}
+         }]);
          platform.bootstrapModule(ExampleStylesModule).then(ref => {
-           const appRef: ApplicationRef = ref.injector.get(ApplicationRef);
-           const app = appRef.components[0].location.nativeElement;
-           expect(app.children.length).toBe(2);
-           const style = app.children[1];
-           expect(style.type).toBe('style');
-           expect(style.children[0].data).toContain('color: red');
+           const doc = ref.injector.get(DOCUMENT);
+           const head = getDOM().getElementsByTagName(doc, 'head')[0];
+           const styles: any[] = head.children as any;
+           expect(styles.length).toBe(1);
+           expect(getDOM().getText(styles[0])).toContain('color: red');
+           expect(getDOM().getAttribute(styles[0], 'ng-transition')).toBe('example-styles');
          });
        }));
 

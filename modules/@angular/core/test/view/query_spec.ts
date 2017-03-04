@@ -18,8 +18,8 @@ export function main() {
   describe(`Query Views`, () => {
     function compViewDef(
         nodes: NodeDef[], updateDirectives?: ViewUpdateFn, updateRenderer?: ViewUpdateFn,
-        handleEvent?: ViewHandleEventFn, viewFlags: ViewFlags = ViewFlags.None): ViewDefinition {
-      return viewDef(viewFlags, nodes, updateDirectives, updateRenderer, handleEvent);
+        viewFlags: ViewFlags = ViewFlags.None): ViewDefinition {
+      return viewDef(viewFlags, nodes, updateDirectives, updateRenderer);
     }
 
     function embeddedViewDef(nodes: NodeDef[], update?: ViewUpdateFn): ViewDefinitionFactory {
@@ -45,21 +45,22 @@ export function main() {
       return [
         directiveDef(NodeFlags.None, null, 1, QueryService, []),
         queryDef(
-            NodeFlags.HasContentQuery | NodeFlags.HasDynamicQuery, someQueryId,
+            NodeFlags.TypeContentQuery | NodeFlags.DynamicQuery, someQueryId,
             {'a': QueryBindingType.All})
       ];
     }
 
-    function viewQueryProviders(nodes: NodeDef[]) {
+    function compViewQueryProviders(extraChildCount: number, nodes: NodeDef[]) {
       return [
-        directiveDef(
-            NodeFlags.None, null, 0, QueryService, [], null, null,
+        elementDef(
+            NodeFlags.None, null, null, 1 + extraChildCount, 'div', null, null, null, null,
             () => compViewDef([
               queryDef(
-                  NodeFlags.HasViewQuery | NodeFlags.HasDynamicQuery, someQueryId,
+                  NodeFlags.TypeViewQuery | NodeFlags.DynamicQuery, someQueryId,
                   {'a': QueryBindingType.All}),
               ...nodes
             ])),
+        directiveDef(NodeFlags.Component, null, 0, QueryService, [], null, null, ),
       ];
     }
 
@@ -110,27 +111,29 @@ export function main() {
     describe('view queries', () => {
       it('should query providers in the view', () => {
         const {view} = createAndGetRootNodes(compViewDef([
-          elementDef(NodeFlags.None, null, null, 1, 'div'),
-          ...viewQueryProviders([
-            elementDef(NodeFlags.None, null, null, 1, 'span'),
-            aServiceProvider(),
-          ]),
+          ...compViewQueryProviders(
+              0,
+              [
+                elementDef(NodeFlags.None, null, null, 1, 'span'),
+                aServiceProvider(),
+              ]),
         ]));
 
         Services.checkAndUpdateView(view);
 
         const comp: QueryService = asProviderData(view, 1).instance;
-        const compView = asProviderData(view, 1).componentView;
+        const compView = asElementData(view, 0).componentView;
         expect(comp.a.length).toBe(1);
         expect(comp.a.first).toBe(asProviderData(compView, 2).instance);
       });
 
       it('should not query providers on the host element', () => {
         const {view} = createAndGetRootNodes(compViewDef([
-          elementDef(NodeFlags.None, null, null, 2, 'div'),
-          ...viewQueryProviders([
-            elementDef(NodeFlags.None, null, null, 0, 'span'),
-          ]),
+          ...compViewQueryProviders(
+              1,
+              [
+                elementDef(NodeFlags.None, null, null, 0, 'span'),
+              ]),
           aServiceProvider(),
         ]));
 
@@ -145,7 +148,7 @@ export function main() {
         const {view} = createAndGetRootNodes(compViewDef([
           elementDef(NodeFlags.None, null, null, 5, 'div'),
           ...contentQueryProviders(),
-          anchorDef(NodeFlags.HasEmbeddedViews, null, null, 2, embeddedViewDef([
+          anchorDef(NodeFlags.EmbeddedViews, null, null, 2, null, embeddedViewDef([
                       elementDef(NodeFlags.None, null, null, 1, 'div'),
                       aServiceProvider(),
                     ])),
@@ -153,7 +156,7 @@ export function main() {
         ]));
 
         const childView = Services.createEmbeddedView(view, view.def.nodes[3]);
-        attachEmbeddedView(asElementData(view, 3), 0, childView);
+        attachEmbeddedView(view, asElementData(view, 3), 0, childView);
         Services.checkAndUpdateView(view);
 
         // queries on parent elements of anchors
@@ -171,18 +174,18 @@ export function main() {
         const {view} = createAndGetRootNodes(compViewDef([
           elementDef(NodeFlags.None, null, null, 3, 'div'),
           ...contentQueryProviders(),
-          anchorDef(NodeFlags.HasEmbeddedViews, null, null, 0, embeddedViewDef([
+          anchorDef(NodeFlags.EmbeddedViews, null, null, 0, null, embeddedViewDef([
                       elementDef(NodeFlags.None, null, null, 1, 'div'),
                       aServiceProvider(),
                     ])),
           elementDef(NodeFlags.None, null, null, 3, 'div'),
           ...contentQueryProviders(),
-          anchorDef(NodeFlags.HasEmbeddedViews, null, null, 0),
+          anchorDef(NodeFlags.EmbeddedViews, null, null, 0),
         ]));
 
         const childView = Services.createEmbeddedView(view, view.def.nodes[3]);
         // attach at a different place than the one where the template was defined
-        attachEmbeddedView(asElementData(view, 7), 0, childView);
+        attachEmbeddedView(view, asElementData(view, 7), 0, childView);
 
         Services.checkAndUpdateView(view);
 
@@ -200,7 +203,7 @@ export function main() {
         const {view} = createAndGetRootNodes(compViewDef([
           elementDef(NodeFlags.None, null, null, 3, 'div'),
           ...contentQueryProviders(),
-          anchorDef(NodeFlags.HasEmbeddedViews, null, null, 0, embeddedViewDef([
+          anchorDef(NodeFlags.EmbeddedViews, null, null, 0, null, embeddedViewDef([
                       elementDef(NodeFlags.None, null, null, 1, 'div'),
                       aServiceProvider(),
                     ])),
@@ -212,12 +215,13 @@ export function main() {
         expect(qs.a.length).toBe(0);
 
         const childView = Services.createEmbeddedView(view, view.def.nodes[3]);
-        attachEmbeddedView(asElementData(view, 3), 0, childView);
+        attachEmbeddedView(view, asElementData(view, 3), 0, childView);
         Services.checkAndUpdateView(view);
 
         expect(qs.a.length).toBe(1);
 
         detachEmbeddedView(asElementData(view, 3), 0);
+
         Services.checkAndUpdateView(view);
 
         expect(qs.a.length).toBe(0);
@@ -225,13 +229,14 @@ export function main() {
 
       it('should update view queries if embedded views are added or removed', () => {
         const {view} = createAndGetRootNodes(compViewDef([
-          elementDef(NodeFlags.None, null, null, 1, 'div'),
-          ...viewQueryProviders([
-            anchorDef(NodeFlags.HasEmbeddedViews, null, null, 0, embeddedViewDef([
-                        elementDef(NodeFlags.None, null, null, 1, 'div'),
-                        aServiceProvider(),
-                      ])),
-          ]),
+          ...compViewQueryProviders(
+              0,
+              [
+                anchorDef(NodeFlags.EmbeddedViews, null, null, 0, null, embeddedViewDef([
+                            elementDef(NodeFlags.None, null, null, 1, 'div'),
+                            aServiceProvider(),
+                          ])),
+              ]),
         ]));
 
         Services.checkAndUpdateView(view);
@@ -239,9 +244,9 @@ export function main() {
         const comp: QueryService = asProviderData(view, 1).instance;
         expect(comp.a.length).toBe(0);
 
-        const compView = asProviderData(view, 1).componentView;
+        const compView = asElementData(view, 0).componentView;
         const childView = Services.createEmbeddedView(compView, compView.def.nodes[1]);
-        attachEmbeddedView(asElementData(compView, 1), 0, childView);
+        attachEmbeddedView(view, asElementData(compView, 1), 0, childView);
         Services.checkAndUpdateView(view);
 
         expect(comp.a.length).toBe(1);
@@ -263,7 +268,7 @@ export function main() {
           elementDef(NodeFlags.None, null, null, 4, 'div'),
           directiveDef(NodeFlags.None, null, 1, QueryService, []),
           queryDef(
-              NodeFlags.HasContentQuery | NodeFlags.HasDynamicQuery, someQueryId,
+              NodeFlags.TypeContentQuery | NodeFlags.DynamicQuery, someQueryId,
               {'a': QueryBindingType.All}),
           aServiceProvider(),
           aServiceProvider(),
@@ -288,7 +293,7 @@ export function main() {
           elementDef(NodeFlags.None, null, null, 4, 'div'),
           directiveDef(NodeFlags.None, null, 1, QueryService, []),
           queryDef(
-              NodeFlags.HasContentQuery | NodeFlags.HasDynamicQuery, someQueryId,
+              NodeFlags.TypeContentQuery | NodeFlags.DynamicQuery, someQueryId,
               {'a': QueryBindingType.First}),
           aServiceProvider(),
           aServiceProvider(),
@@ -311,7 +316,7 @@ export function main() {
           elementDef(NodeFlags.None, [[someQueryId, QueryValueType.ElementRef]], null, 2, 'div'),
           directiveDef(NodeFlags.None, null, 1, QueryService, []),
           queryDef(
-              NodeFlags.HasContentQuery | NodeFlags.HasDynamicQuery, someQueryId,
+              NodeFlags.TypeContentQuery | NodeFlags.DynamicQuery, someQueryId,
               {'a': QueryBindingType.First}),
         ]));
 
@@ -328,11 +333,11 @@ export function main() {
 
         const {view} = createAndGetRootNodes(compViewDef([
           anchorDef(
-              NodeFlags.None, [[someQueryId, QueryValueType.TemplateRef]], null, 2,
+              NodeFlags.None, [[someQueryId, QueryValueType.TemplateRef]], null, 2, null,
               embeddedViewDef([anchorDef(NodeFlags.None, null, null, 0)])),
           directiveDef(NodeFlags.None, null, 1, QueryService, []),
           queryDef(
-              NodeFlags.HasContentQuery | NodeFlags.HasDynamicQuery, someQueryId,
+              NodeFlags.TypeContentQuery | NodeFlags.DynamicQuery, someQueryId,
               {'a': QueryBindingType.First}),
         ]));
 
@@ -351,7 +356,7 @@ export function main() {
           anchorDef(NodeFlags.None, [[someQueryId, QueryValueType.ViewContainerRef]], null, 2),
           directiveDef(NodeFlags.None, null, 1, QueryService, []),
           queryDef(
-              NodeFlags.HasContentQuery | NodeFlags.HasDynamicQuery, someQueryId,
+              NodeFlags.TypeContentQuery | NodeFlags.DynamicQuery, someQueryId,
               {'a': QueryBindingType.First}),
         ]));
 
@@ -367,7 +372,7 @@ export function main() {
         const {view} = createAndGetRootNodes(compViewDef([
           elementDef(NodeFlags.None, null, null, 3, 'div'),
           ...contentQueryProviders(),
-          anchorDef(NodeFlags.HasEmbeddedViews, null, null, 0, embeddedViewDef([
+          anchorDef(NodeFlags.EmbeddedViews, null, null, 0, null, embeddedViewDef([
                       elementDef(NodeFlags.None, null, null, 1, 'div'),
                       aServiceProvider(),
                     ])),
@@ -377,7 +382,7 @@ export function main() {
         Services.checkNoChangesView(view);
 
         const childView = Services.createEmbeddedView(view, view.def.nodes[3]);
-        attachEmbeddedView(asElementData(view, 3), 0, childView);
+        attachEmbeddedView(view, asElementData(view, 3), 0, childView);
 
         let err: any;
         try {
@@ -403,7 +408,7 @@ export function main() {
           elementDef(NodeFlags.None, null, null, 3, 'div'),
           directiveDef(NodeFlags.None, null, 1, QueryService, []),
           queryDef(
-              NodeFlags.HasContentQuery | NodeFlags.HasDynamicQuery, someQueryId,
+              NodeFlags.TypeContentQuery | NodeFlags.DynamicQuery, someQueryId,
               {'a': QueryBindingType.All}),
           aServiceProvider(),
         ]));

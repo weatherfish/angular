@@ -6,7 +6,7 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {AnimationAnimateMetadata, AnimationEntryMetadata, AnimationGroupMetadata, AnimationKeyframesSequenceMetadata, AnimationMetadata, AnimationStateDeclarationMetadata, AnimationStateMetadata, AnimationStateTransitionMetadata, AnimationStyleMetadata, AnimationWithStepsMetadata, Attribute, ChangeDetectionStrategy, Component, ComponentFactory, Directive, Host, Inject, Injectable, InjectionToken, ModuleWithProviders, Optional, Provider, Query, RendererTypeV2, SchemaMetadata, Self, SkipSelf, Type, resolveForwardRef} from '@angular/core';
+import {Attribute, ChangeDetectionStrategy, Component, ComponentFactory, Directive, Host, Inject, Injectable, InjectionToken, ModuleWithProviders, Optional, Provider, Query, RendererTypeV2, SchemaMetadata, Self, SkipSelf, Type, resolveForwardRef, ɵERROR_COMPONENT_TYPE, ɵLIFECYCLE_HOOKS_VALUES, ɵReflectorReader, ɵccf as createComponentFactory, ɵreflector} from '@angular/core';
 
 import {StaticSymbol, StaticSymbolCache} from './aot/static_symbol';
 import {ngfactoryFilePath} from './aot/util';
@@ -21,7 +21,6 @@ import {CompilerInjectable} from './injectable';
 import {hasLifecycleHook} from './lifecycle_reflector';
 import {NgModuleResolver} from './ng_module_resolver';
 import {PipeResolver} from './pipe_resolver';
-import {ERROR_COMPONENT_TYPE, LIFECYCLE_HOOKS_VALUES, ReflectorReader, reflector, viewEngine} from './private_import_core';
 import {ElementSchemaRegistry} from './schema/element_schema_registry';
 import {SummaryResolver} from './summary_resolver';
 import {getUrlScheme} from './url_resolver';
@@ -54,7 +53,7 @@ export class CompileMetadataResolver {
       private _schemaRegistry: ElementSchemaRegistry,
       private _directiveNormalizer: DirectiveNormalizer,
       @Optional() private _staticSymbolCache: StaticSymbolCache,
-      private _reflector: ReflectorReader = reflector,
+      private _reflector: ɵReflectorReader = ɵreflector,
       @Optional() @Inject(ERROR_COLLECTOR_TOKEN) private _errorCollector?: ErrorCollector) {}
 
   clearCacheFor(type: Type<any>) {
@@ -107,10 +106,6 @@ export class CompileMetadataResolver {
     }
   }
 
-  private getDirectiveWrapperClass(dirType: any): StaticSymbol|cpl.ProxyClass {
-    return this.getGeneratedClass(dirType, cpl.dirWrapperClassName(dirType));
-  }
-
   private getComponentViewClass(dirType: any): StaticSymbol|cpl.ProxyClass {
     return this.getGeneratedClass(dirType, cpl.viewClassName(dirType, 0));
   }
@@ -148,66 +143,8 @@ export class CompileMetadataResolver {
           ngfactoryFilePath(dirType.filePath), cpl.componentFactoryName(dirType));
     } else {
       const hostView = this.getHostComponentViewClass(dirType);
-      if (this._config.useViewEngine) {
-        return viewEngine.createComponentFactory(selector, dirType, <any>hostView);
-      } else {
-        return new ComponentFactory(selector, <any>hostView, dirType);
-      }
+      return createComponentFactory(selector, dirType, <any>hostView);
     }
-  }
-
-  getAnimationEntryMetadata(entry: AnimationEntryMetadata): cpl.CompileAnimationEntryMetadata {
-    const defs = entry.definitions.map(def => this._getAnimationStateMetadata(def));
-    return new cpl.CompileAnimationEntryMetadata(entry.name, defs);
-  }
-
-  private _getAnimationStateMetadata(value: AnimationStateMetadata):
-      cpl.CompileAnimationStateMetadata {
-    if (value instanceof AnimationStateDeclarationMetadata) {
-      const styles = this._getAnimationStyleMetadata(value.styles);
-      return new cpl.CompileAnimationStateDeclarationMetadata(value.stateNameExpr, styles);
-    }
-
-    if (value instanceof AnimationStateTransitionMetadata) {
-      return new cpl.CompileAnimationStateTransitionMetadata(
-          value.stateChangeExpr, this._getAnimationMetadata(value.steps));
-    }
-
-    return null;
-  }
-
-  private _getAnimationStyleMetadata(value: AnimationStyleMetadata):
-      cpl.CompileAnimationStyleMetadata {
-    return new cpl.CompileAnimationStyleMetadata(value.offset, value.styles);
-  }
-
-  private _getAnimationMetadata(value: AnimationMetadata): cpl.CompileAnimationMetadata {
-    if (value instanceof AnimationStyleMetadata) {
-      return this._getAnimationStyleMetadata(value);
-    }
-
-    if (value instanceof AnimationKeyframesSequenceMetadata) {
-      return new cpl.CompileAnimationKeyframesSequenceMetadata(
-          value.steps.map(entry => this._getAnimationStyleMetadata(entry)));
-    }
-
-    if (value instanceof AnimationAnimateMetadata) {
-      const animateData =
-          <cpl.CompileAnimationStyleMetadata|cpl.CompileAnimationKeyframesSequenceMetadata>this
-              ._getAnimationMetadata(value.styles);
-      return new cpl.CompileAnimationAnimateMetadata(value.timings, animateData);
-    }
-
-    if (value instanceof AnimationWithStepsMetadata) {
-      const steps = value.steps.map(step => this._getAnimationMetadata(step));
-
-      if (value instanceof AnimationGroupMetadata) {
-        return new cpl.CompileAnimationGroupMetadata(steps);
-      }
-
-      return new cpl.CompileAnimationSequenceMetadata(steps);
-    }
-    return null;
   }
 
   private _loadSummary(type: any, kind: cpl.CompileSummaryKind): cpl.CompileTypeSummary {
@@ -244,7 +181,6 @@ export class CompileMetadataResolver {
         queries: metadata.queries,
         viewQueries: metadata.viewQueries,
         entryComponents: metadata.entryComponents,
-        wrapperType: metadata.wrapperType,
         componentViewType: metadata.componentViewType,
         rendererType: metadata.rendererType,
         componentFactory: metadata.componentFactory,
@@ -306,9 +242,7 @@ export class CompileMetadataResolver {
       assertArrayOfStrings('styleUrls', dirMeta.styleUrls);
       assertInterpolationSymbols('interpolation', dirMeta.interpolation);
 
-      const animations = dirMeta.animations ?
-          dirMeta.animations.map(e => this.getAnimationEntryMetadata(e)) :
-          null;
+      const animations = dirMeta.animations;
 
       nonNormalizedTemplateMetadata = new cpl.CompileTemplateMetadata({
         encapsulation: dirMeta.encapsulation,
@@ -381,7 +315,6 @@ export class CompileMetadataResolver {
       queries: queries,
       viewQueries: viewQueries,
       entryComponents: entryComponentMetadata,
-      wrapperType: this.getDirectiveWrapperClass(directiveType),
       componentViewType: nonNormalizedTemplateMetadata ? this.getComponentViewClass(directiveType) :
                                                          undefined,
       rendererType: nonNormalizedTemplateMetadata ? this.getRendererType(directiveType) : undefined,
@@ -739,7 +672,7 @@ export class CompileMetadataResolver {
       reference: identifier.reference,
       diDeps: this._getDependenciesMetadata(identifier.reference, dependencies),
       lifecycleHooks:
-          LIFECYCLE_HOOKS_VALUES.filter(hook => hasLifecycleHook(hook, identifier.reference)),
+          ɵLIFECYCLE_HOOKS_VALUES.filter(hook => hasLifecycleHook(hook, identifier.reference)),
     };
   }
 
@@ -825,6 +758,8 @@ export class CompileMetadataResolver {
             token = paramEntry.attributeName;
           } else if (paramEntry instanceof Inject) {
             token = paramEntry.token;
+          } else if (paramEntry instanceof InjectionToken) {
+            token = paramEntry;
           } else if (isValidType(paramEntry) && token == null) {
             token = paramEntry;
           }
@@ -1087,7 +1022,7 @@ function isValidType(value: any): boolean {
 }
 
 export function componentModuleUrl(
-    reflector: ReflectorReader, type: Type<any>, cmpMetadata: Component): string {
+    reflector: ɵReflectorReader, type: Type<any>, cmpMetadata: Component): string {
   if (type instanceof StaticSymbol) {
     return type.filePath;
   }
@@ -1131,6 +1066,6 @@ function componentStillLoadingError(compType: Type<any>) {
   debugger;
   const error =
       Error(`Can't compile synchronously as ${stringify(compType)} is still being loaded!`);
-  (error as any)[ERROR_COMPONENT_TYPE] = compType;
+  (error as any)[ɵERROR_COMPONENT_TYPE] = compType;
   return error;
 }

@@ -37,6 +37,11 @@ export class CollectorOptions {
    * the source.
    */
   quotedNames?: boolean;
+
+  /**
+   * Do not simplify invalid expressions.
+   */
+  verboseInvalidExpression?: boolean;
 }
 
 /**
@@ -575,6 +580,16 @@ function validateMetadata(
     if (classData.members) {
       Object.getOwnPropertyNames(classData.members)
           .forEach(name => classData.members[name].forEach((m) => validateMember(classData, m)));
+    }
+    if (classData.statics) {
+      Object.getOwnPropertyNames(classData.statics).forEach(name => {
+        const staticMember = classData.statics[name];
+        if (isFunctionMetadata(staticMember)) {
+          validateExpression(staticMember.value);
+        } else {
+          validateExpression(staticMember);
+        }
+      });
     }
   }
 

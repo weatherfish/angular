@@ -14,9 +14,9 @@ import {expect} from '@angular/platform-browser/testing/matchers';
 import {Observable} from 'rxjs/Observable';
 import {map} from 'rxjs/operator/map';
 
-import {ActivatedRoute, ActivatedRouteSnapshot, CanActivate, CanDeactivate, DetachedRouteHandle, Event, NavigationCancel, NavigationEnd, NavigationError, NavigationStart, PRIMARY_OUTLET, Params, PreloadAllModules, PreloadingStrategy, Resolve, RouteReuseStrategy, Router, RouterModule, RouterStateSnapshot, RoutesRecognized, UrlHandlingStrategy, UrlSegmentGroup, UrlTree} from '../index';
+import {ActivatedRoute, ActivatedRouteSnapshot, CanActivate, CanDeactivate, DetachedRouteHandle, Event, NavigationCancel, NavigationEnd, NavigationError, NavigationStart, PRIMARY_OUTLET, Params, PreloadAllModules, PreloadingStrategy, Resolve, RouteConfigLoadEnd, RouteConfigLoadStart, RouteReuseStrategy, Router, RouterModule, RouterStateSnapshot, RoutesRecognized, UrlHandlingStrategy, UrlSegmentGroup, UrlTree} from '../index';
 import {RouterPreloader} from '../src/router_preloader';
-import {forEach} from '../src/utils/collection';
+import {forEach, shallowEqual} from '../src/utils/collection';
 import {RouterTestingModule, SpyNgModuleFactoryLoader} from '../testing';
 
 describe('Integration', () => {
@@ -1527,6 +1527,125 @@ describe('Integration', () => {
              expect(fixture.nativeElement).toHaveText('simple');
            })));
       });
+
+      describe('runGuardsAndResolvers', () => {
+        let count = 0;
+
+        beforeEach(() => {
+          count = 0;
+          TestBed.configureTestingModule({
+            providers: [{
+              provide: 'loggingCanActivate',
+              useValue: (a: any, b: any) => {
+                count++;
+                return true;
+              }
+            }]
+          });
+        });
+
+        it('should rerun guards when params change',
+           fakeAsync(inject([Router, Location], (router: Router, location: Location) => {
+             const fixture = createRoot(router, RootCmpWithTwoOutlets);
+
+             router.resetConfig([
+               {
+                 path: 'a',
+                 runGuardsAndResolvers: 'paramsChange',
+                 component: SimpleCmp,
+                 canActivate: ['loggingCanActivate']
+               },
+               {path: 'b', component: SimpleCmp, outlet: 'right'}
+             ]);
+
+             router.navigateByUrl('/a');
+             advance(fixture);
+             expect(count).toEqual(1);
+
+             router.navigateByUrl('/a;p=1');
+             advance(fixture);
+             expect(count).toEqual(2);
+
+             router.navigateByUrl('/a;p=2');
+             advance(fixture);
+             expect(count).toEqual(3);
+
+             router.navigateByUrl('/a;p=2?q=1');
+             advance(fixture);
+             expect(count).toEqual(3);
+           })));
+
+        it('should rerun guards when query params change',
+           fakeAsync(inject([Router, Location], (router: Router, location: Location) => {
+             const fixture = createRoot(router, RootCmpWithTwoOutlets);
+
+             router.resetConfig([
+               {
+                 path: 'a',
+                 runGuardsAndResolvers: 'paramsOrQueryParamsChange',
+                 component: SimpleCmp,
+                 canActivate: ['loggingCanActivate']
+               },
+               {path: 'b', component: SimpleCmp, outlet: 'right'}
+             ]);
+
+             router.navigateByUrl('/a');
+             advance(fixture);
+             expect(count).toEqual(1);
+
+             router.navigateByUrl('/a;p=1');
+             advance(fixture);
+             expect(count).toEqual(2);
+
+             router.navigateByUrl('/a;p=2');
+             advance(fixture);
+             expect(count).toEqual(3);
+
+             router.navigateByUrl('/a;p=2?q=1');
+             advance(fixture);
+             expect(count).toEqual(4);
+
+             router.navigateByUrl('/a;p=2(right:b)?q=1');
+             advance(fixture);
+             expect(count).toEqual(4);
+           })));
+
+        it('should always rerun guards',
+           fakeAsync(inject([Router, Location], (router: Router, location: Location) => {
+             const fixture = createRoot(router, RootCmpWithTwoOutlets);
+
+             router.resetConfig([
+               {
+                 path: 'a',
+                 runGuardsAndResolvers: 'always',
+                 component: SimpleCmp,
+                 canActivate: ['loggingCanActivate']
+               },
+               {path: 'b', component: SimpleCmp, outlet: 'right'}
+             ]);
+
+             router.navigateByUrl('/a');
+             advance(fixture);
+             expect(count).toEqual(1);
+
+             router.navigateByUrl('/a;p=1');
+             advance(fixture);
+             expect(count).toEqual(2);
+
+             router.navigateByUrl('/a;p=2');
+             advance(fixture);
+             expect(count).toEqual(3);
+
+             router.navigateByUrl('/a;p=2?q=1');
+             advance(fixture);
+             expect(count).toEqual(4);
+
+             router.navigateByUrl('/a;p=2(right:b)?q=1');
+             advance(fixture);
+             expect(count).toEqual(5);
+           })));
+      });
+
     });
 
     describe('CanDeactivate', () => {
@@ -1949,15 +2068,16 @@ describe('Integration', () => {
         beforeEach(() => {
           TestBed.configureTestingModule({
             providers: [
-              {provide: 'alwaysFalse', useValue: (a: any) => false}, {
+              {provide: 'alwaysFalse', useValue: (a: any) => false},
+              {
                 provide: 'returnFalseAndNavigate',
                 useFactory: (router: any) => (a: any) => {
                   router.navigate(['blank']);
                   return false;
                 },
-                deps: [Router]
+                deps: [Router],
               },
-              {provide: 'alwaysTrue', useValue: (a: any) => true}
+              {provide: 'alwaysTrue', useValue: (a: any) => true},
             ]
           });
         });
@@ -1999,7 +2119,7 @@ describe('Integration', () => {
 
                  expectEvents(recordedEvents, [
                    [NavigationStart, '/lazyFalse/loaded'],
-                   [NavigationCancel, '/lazyFalse/loaded']
+                   [NavigationCancel, '/lazyFalse/loaded'],
                  ]);
 
                  recordedEvents.splice(0);
@@ -2011,8 +2131,11 @@ describe('Integration', () => {
                  expect(location.path()).toEqual('/lazyTrue/loaded');
 
                  expectEvents(recordedEvents, [
-                   [NavigationStart, '/lazyTrue/loaded'], [RoutesRecognized, '/lazyTrue/loaded'],
-                   [NavigationEnd, '/lazyTrue/loaded']
+                   [NavigationStart, '/lazyTrue/loaded'],
+                   [RouteConfigLoadStart],
+                   [RouteConfigLoadEnd],
+                   [RoutesRecognized, '/lazyTrue/loaded'],
+                   [NavigationEnd, '/lazyTrue/loaded'],
                  ]);
                })));
 
@@ -2299,6 +2422,52 @@ describe('Integration', () => {
              expect(fixture.nativeElement).toHaveText('lazy-loaded-parent [lazy-loaded-child]');
            })));
 
+    it('should emit RouteConfigLoadStart and RouteConfigLoadEnd event when route is lazy loaded',
+       fakeAsync(inject(
+           [Router, Location, NgModuleFactoryLoader],
+           (router: Router, location: Location, loader: SpyNgModuleFactoryLoader) => {
+             @Component({
+               selector: 'lazy',
+               template: 'lazy-loaded-parent [<router-outlet></router-outlet>]',
+             })
+             class ParentLazyLoadedComponent {
+             }
+
+             @Component({selector: 'lazy', template: 'lazy-loaded-child'})
+             class ChildLazyLoadedComponent {
+             }
+
+             @NgModule({
+               declarations: [ParentLazyLoadedComponent, ChildLazyLoadedComponent],
+               imports: [RouterModule.forChild([{
+                 path: 'loaded',
+                 component: ParentLazyLoadedComponent,
+                 children: [{path: 'child', component: ChildLazyLoadedComponent}],
+               }])]
+             })
+             class LoadedModule {
+             }
+
+             const events: Array<RouteConfigLoadStart|RouteConfigLoadEnd> = [];
+
+             router.events.subscribe(e => {
+               if (e instanceof RouteConfigLoadStart || e instanceof RouteConfigLoadEnd) {
+                 events.push(e);
+               }
+             });
+
+             loader.stubbedModules = {expected: LoadedModule};
+             const fixture = createRoot(router, RootCmp);
+             router.resetConfig([{path: 'lazy', loadChildren: 'expected'}]);
+
+             router.navigateByUrl('/lazy/loaded/child');
+             advance(fixture);
+
+             expect(events.length).toEqual(2);
+             expect(events[0].toString()).toEqual('RouteConfigLoadStart(path: lazy)');
+             expect(events[1].toString()).toEqual('RouteConfigLoadEnd(path: lazy)');
+           })));
+
     it('throws an error when forRoot() is used in a lazy context',
        fakeAsync(inject(
            [Router, Location, NgModuleFactoryLoader],
@@ -2490,9 +2659,11 @@ describe('Integration', () => {
 
              expect(location.path()).toEqual('/');
 
-             expectEvents(
-                 recordedEvents,
-                 [[NavigationStart, '/lazy/loaded'], [NavigationError, '/lazy/loaded']]);
+             expectEvents(recordedEvents, [
+               [NavigationStart, '/lazy/loaded'],
+               [RouteConfigLoadStart],
+               [NavigationError, '/lazy/loaded'],
+             ]);
            })));
 
     it('should work with complex redirect rules',

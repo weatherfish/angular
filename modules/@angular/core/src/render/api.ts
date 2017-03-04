@@ -6,23 +6,22 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {AnimationKeyframe} from '../../src/animation/animation_keyframe';
-import {AnimationPlayer} from '../../src/animation/animation_player';
-import {AnimationStyles} from '../../src/animation/animation_styles';
 import {InjectionToken, Injector} from '../di';
 import {ViewEncapsulation} from '../metadata/view';
 
 /**
- * @experimental
+ * @deprecated Use `RendererTypeV2` (and `RendererV2`) instead.
  */
-// TODO (matsko): add typing for the animation function
 export class RenderComponentType {
   constructor(
       public id: string, public templateUrl: string, public slotCount: number,
       public encapsulation: ViewEncapsulation, public styles: Array<string|any[]>,
-      public animations: {[key: string]: Function}) {}
+      public animations: any) {}
 }
 
+/**
+ * @deprecated Debug info is handeled internally in the view engine now.
+ */
 export abstract class RenderDebugInfo {
   abstract get injector(): Injector;
   abstract get component(): any;
@@ -32,6 +31,9 @@ export abstract class RenderDebugInfo {
   abstract get source(): string;
 }
 
+/**
+ * @deprecated Use the `RendererV2` instead.
+ */
 export interface DirectRenderer {
   remove(node: any): void;
   appendChild(node: any, parent: any): void;
@@ -41,7 +43,7 @@ export interface DirectRenderer {
 }
 
 /**
- * @experimental
+ * @deprecated Use the `RendererV2` instead.
  */
 export abstract class Renderer {
   abstract selectRootElement(selectorOrNode: string|any, debugInfo?: RenderDebugInfo): any;
@@ -86,10 +88,11 @@ export abstract class Renderer {
   abstract setText(renderNode: any, text: string): void;
 
   abstract animate(
-      element: any, startingStyles: AnimationStyles, keyframes: AnimationKeyframe[],
-      duration: number, delay: number, easing: string,
-      previousPlayers?: AnimationPlayer[]): AnimationPlayer;
+      element: any, startingStyles: any, keyframes: any[], duration: number, delay: number,
+      easing: string, previousPlayers?: any[]): any;
 }
+
+export const RendererV2Interceptor = new InjectionToken<RendererV2[]>('RendererV2Interceptor');
 
 /**
  * Injectable service that provides a low-level interface for modifying the UI.
@@ -102,7 +105,8 @@ export abstract class Renderer {
  * If you are implementing a custom renderer, you must implement this interface.
  *
  * The default Renderer implementation is `DomRenderer`. Also available is `WebWorkerRenderer`.
- * @experimental
+ *
+ * @deprecated Use `RendererFactoryV2` instead.
  */
 export abstract class RootRenderer {
   abstract renderComponent(componentType: RenderComponentType): Renderer;
@@ -115,7 +119,7 @@ export interface RendererTypeV2 {
   id: string;
   encapsulation: ViewEncapsulation;
   styles: (string|any[])[];
-  data: {[kind: string]: any[]};
+  data: {[kind: string]: any};
 }
 
 /**
@@ -129,6 +133,12 @@ export abstract class RendererFactoryV2 {
  * @experimental
  */
 export abstract class RendererV2 {
+  /**
+   * This field can be used to store arbitrary data on this renderer instance.
+   * This is useful for renderers that delegate to other renderers.
+   */
+  abstract get data(): {[key: string]: any};
+
   abstract destroy(): void;
   abstract createElement(name: string, namespace?: string): any;
   abstract createComment(value: string): any;

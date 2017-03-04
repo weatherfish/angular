@@ -6,7 +6,7 @@
  * found in the LICENSE file at https://angular.io/license
  */
 import {EventEmitter} from '../../facade/async';
-import {RenderStoreObject, Serializer} from '../shared/serializer';
+import {Serializer, SerializerTypes} from '../shared/serializer';
 
 import {serializeEventWithTarget, serializeGenericEvent, serializeKeyboardEvent, serializeMouseEvent, serializeTransitionEvent} from './event_serializer';
 
@@ -15,15 +15,15 @@ export class EventDispatcher {
 
   dispatchAnimationEvent(player: any, phaseName: string, element: any): boolean {
     this._sink.emit({
-      'element': this._serializer.serialize(element, RenderStoreObject),
-      'animationPlayer': this._serializer.serialize(player, RenderStoreObject),
-      'phaseName': phaseName
+      'element': this._serializer.serialize(element, SerializerTypes.RENDER_STORE_OBJECT),
+      'animationPlayer': this._serializer.serialize(player, SerializerTypes.RENDER_STORE_OBJECT),
+      'phaseName': phaseName,
     });
     return true;
   }
 
   dispatchRenderEvent(element: any, eventTarget: string, eventName: string, event: any): boolean {
-    let serializedEvent: any /** TODO #9100 */;
+    let serializedEvent: any;
     // TODO (jteplitz602): support custom events #3350
     switch (event.type) {
       case 'click':
@@ -105,11 +105,12 @@ export class EventDispatcher {
       default:
         throw new Error(eventName + ' not supported on WebWorkers');
     }
+
     this._sink.emit({
-      'element': this._serializer.serialize(element, RenderStoreObject),
+      'element': this._serializer.serialize(element, SerializerTypes.RENDER_STORE_OBJECT),
       'eventName': eventName,
       'eventTarget': eventTarget,
-      'event': serializedEvent
+      'event': serializedEvent,
     });
 
     // TODO(kegluneq): Eventually, we want the user to indicate from the UI side whether the event

@@ -26,8 +26,7 @@ import {CompilerFactory, CompilerOptions} from './linker/compiler';
 import {ComponentFactory, ComponentRef} from './linker/component_factory';
 import {ComponentFactoryResolver} from './linker/component_factory_resolver';
 import {NgModuleFactory, NgModuleInjector, NgModuleRef} from './linker/ng_module_factory';
-import {AppView} from './linker/view';
-import {ViewRef, ViewRef_} from './linker/view_ref';
+import {InternalViewRef, ViewRef} from './linker/view_ref';
 import {WtfScopeFn, wtfCreateScope, wtfLeave} from './profile/profile';
 import {Testability, TestabilityRegistry} from './testability/testability';
 import {Type} from './type';
@@ -424,7 +423,7 @@ export class ApplicationRef_ extends ApplicationRef {
   private _bootstrapListeners: ((compRef: ComponentRef<any>) => void)[] = [];
   private _rootComponents: ComponentRef<any>[] = [];
   private _rootComponentTypes: Type<any>[] = [];
-  private _views: AppView<any>[] = [];
+  private _views: InternalViewRef[] = [];
   private _runningTick: boolean = false;
   private _enforceNoNewChanges: boolean = false;
   private _isStable: Observable<boolean>;
@@ -434,9 +433,7 @@ export class ApplicationRef_ extends ApplicationRef {
       private _zone: NgZone, private _console: Console, private _injector: Injector,
       private _exceptionHandler: ErrorHandler,
       private _componentFactoryResolver: ComponentFactoryResolver,
-      private _initStatus: ApplicationInitStatus,
-      @Optional() private _testabilityRegistry: TestabilityRegistry,
-      @Optional() private _testability: Testability) {
+      private _initStatus: ApplicationInitStatus) {
     super();
     this._enforceNoNewChanges = isDevMode();
 
@@ -485,15 +482,15 @@ export class ApplicationRef_ extends ApplicationRef {
   }
 
   attachView(viewRef: ViewRef): void {
-    const view = (viewRef as ViewRef_<any>).internalView;
+    const view = (viewRef as InternalViewRef);
     this._views.push(view);
     view.attachToAppRef(this);
   }
 
   detachView(viewRef: ViewRef): void {
-    const view = (viewRef as ViewRef_<any>).internalView;
+    const view = (viewRef as InternalViewRef);
     ListWrapper.remove(this._views, view);
-    view.detach();
+    view.detachFromAppRef();
   }
 
   bootstrap<C>(componentOrFactory: ComponentFactory<C>|Type<C>): ComponentRef<C> {
@@ -547,9 +544,9 @@ export class ApplicationRef_ extends ApplicationRef {
     const scope = ApplicationRef_._tickScope();
     try {
       this._runningTick = true;
-      this._views.forEach((view) => view.ref.detectChanges());
+      this._views.forEach((view) => view.detectChanges());
       if (this._enforceNoNewChanges) {
-        this._views.forEach((view) => view.ref.checkNoChanges());
+        this._views.forEach((view) => view.checkNoChanges());
       }
     } finally {
       this._runningTick = false;

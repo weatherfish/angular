@@ -8,7 +8,7 @@
 
 import {Component, Directive, Input, Type, forwardRef} from '@angular/core';
 import {ComponentFixture, TestBed, async, fakeAsync, tick} from '@angular/core/testing';
-import {AbstractControl, ControlValueAccessor, FormsModule, NG_ASYNC_VALIDATORS, NG_VALUE_ACCESSOR, NgForm, Validator} from '@angular/forms';
+import {AbstractControl, AsyncValidator, ControlValueAccessor, FormsModule, NG_ASYNC_VALIDATORS, NG_VALUE_ACCESSOR, NgForm} from '@angular/forms';
 import {By} from '@angular/platform-browser/src/dom/debug/by';
 import {getDOM} from '@angular/platform-browser/src/dom/dom_adapter';
 import {dispatchEvent} from '@angular/platform-browser/testing/browser_util';
@@ -95,6 +95,16 @@ export function main() {
 
            const form = fixture.debugElement.query(By.css('form'));
            expect(form.nativeElement.getAttribute('novalidate')).toEqual('');
+         }));
+
+      it('should be possible to use native validation and angular forms', fakeAsync(() => {
+           const fixture = initTest(NgModelNativeValidateForm);
+
+           fixture.detectChanges();
+           tick();
+
+           const form = fixture.debugElement.query(By.css('form'));
+           expect(form.nativeElement.hasAttribute('novalidate')).toEqual(false);
          }));
 
       it('should support ngModelGroup', fakeAsync(() => {
@@ -258,7 +268,7 @@ export function main() {
         const fixture = initTest(NgNoFormComp);
         fixture.detectChanges();
         const form = fixture.debugElement.query(By.css('form'));
-        expect(form.nativeElement.hasAttribute('novalidate')).toBeFalsy();
+        expect(form.nativeElement.hasAttribute('novalidate')).toEqual(false);
       });
     });
 
@@ -1222,6 +1232,10 @@ class NgModelForm {
   onReset() {}
 }
 
+@Component({selector: 'ng-model-native-validate-form', template: `<form ngNativeValidate></form>`})
+class NgModelNativeValidateForm {
+}
+
 @Component({
   selector: 'ng-model-group-form',
   template: `
@@ -1493,7 +1507,7 @@ class NgModelEmailValidator {
     {provide: NG_ASYNC_VALIDATORS, useExisting: forwardRef(() => NgAsyncValidator), multi: true}
   ]
 })
-class NgAsyncValidator implements Validator {
+class NgAsyncValidator implements AsyncValidator {
   validate(c: AbstractControl) { return Promise.resolve(null); }
 }
 

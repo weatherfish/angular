@@ -6,10 +6,9 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {AnimationQueue} from '../animation/animation_queue';
+import {ApplicationRef} from '../application_ref';
 import {ChangeDetectorRef} from '../change_detection/change_detector_ref';
-import {ChangeDetectorStatus} from '../change_detection/constants';
-import {AppView} from './view';
+
 
 /**
  * @stable
@@ -54,7 +53,7 @@ export abstract class ViewRef extends ChangeDetectorRef {
  * ```
  * Count: {{items.length}}
  * <ul>
- *   <template ngFor let-item [ngForOf]="items"></template>
+ *   <ng-template ngFor let-item [ngForOf]="items"></ng-template>
  * </ul>
  * ```
  *
@@ -71,7 +70,7 @@ export abstract class ViewRef extends ChangeDetectorRef {
  * <!-- ViewRef: outer-0 -->
  * Count: 2
  * <ul>
- *   <template view-container-ref></template>
+ *   <ng-template view-container-ref></ng-template>
  *   <!-- ViewRef: inner-1 --><li>first</li><!-- /ViewRef: inner-1 -->
  *   <!-- ViewRef: inner-2 --><li>second</li><!-- /ViewRef: inner-2 -->
  * </ul>
@@ -85,41 +84,7 @@ export abstract class EmbeddedViewRef<C> extends ViewRef {
   abstract get rootNodes(): any[];
 }
 
-export class ViewRef_<C> implements EmbeddedViewRef<C>, ChangeDetectorRef {
-  /** @internal */
-  _originalMode: ChangeDetectorStatus;
-
-  constructor(private _view: AppView<C>, public animationQueue: AnimationQueue) {
-    this._view = _view;
-    this._originalMode = this._view.cdMode;
-  }
-
-  get internalView(): AppView<C> { return this._view; }
-
-  get rootNodes(): any[] { return this._view.flatRootNodes; }
-
-  get context() { return this._view.context; }
-
-  get destroyed(): boolean { return this._view.destroyed; }
-
-  markForCheck(): void { this._view.markPathToRootAsCheckOnce(); }
-  detach(): void { this._view.cdMode = ChangeDetectorStatus.Detached; }
-  detectChanges(): void {
-    this._view.detectChanges(false);
-    this.animationQueue.flush();
-  }
-  checkNoChanges(): void { this._view.detectChanges(true); }
-  reattach(): void {
-    this._view.cdMode = this._originalMode;
-    this.markForCheck();
-  }
-
-  onDestroy(callback: Function) {
-    if (!this._view.disposables) {
-      this._view.disposables = [];
-    }
-    this._view.disposables.push(callback);
-  }
-
-  destroy() { this._view.detachAndDestroy(); }
+export interface InternalViewRef extends ViewRef {
+  detachFromAppRef(): void;
+  attachToAppRef(appRef: ApplicationRef): void;
 }
