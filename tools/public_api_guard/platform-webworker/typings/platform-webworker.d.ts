@@ -59,7 +59,7 @@ export interface ReceivedMessage {
 
 /** @experimental */
 export declare const enum SerializerTypes {
-    RENDERER_TYPE_V2 = 0,
+    RENDERER_TYPE_2 = 0,
     PRIMITIVE = 1,
     RENDER_STORE_OBJECT = 2,
 }
@@ -93,6 +93,10 @@ export declare const WORKER_APP_LOCATION_PROVIDERS: ({
     useFactory: (platformLocation: WebWorkerPlatformLocation, zone: NgZone) => () => Promise<boolean>;
     multi: boolean;
     deps: (typeof NgZone | typeof PlatformLocation)[];
+} | {
+    provide: InjectionToken<Promise<any>>;
+    useFactory: (platformLocation: WebWorkerPlatformLocation) => Promise<any>;
+    deps: typeof PlatformLocation[];
 })[];
 
 /** @experimental */

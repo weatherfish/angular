@@ -2,7 +2,7 @@
 Routing
 
 @intro
-We add the Angular Router and learn to navigate among the views
+We add the Angular Router and learn to navigate among the views.
 
 @description
 We received new requirements for our Tour of Heroes application:
@@ -15,12 +15,12 @@ We received new requirements for our Tour of Heroes application:
 When we’re done, users will be able to navigate the app like this:
 
 <figure class='image-display'>
-  <img src='/resources/images/devguide/toh/nav-diagram.png' alt="View navigations">  </img>
+  <img src='assets/images/devguide/toh/nav-diagram.png' alt="View navigations">  </img>
 </figure>
 
 We'll add Angular’s *Router* to our app to satisfy these requirements.
 
-The [Routing and Navigation](../guide/router.html) chapter covers the router
+The [Routing and Navigation](guide/router) chapter covers the router
 in more detail than we will in this tutorial.
 Run the <live-example></live-example> for this part.
 
@@ -93,6 +93,27 @@ Instead of displaying heroes automatically, we'd like to show them *after* the u
 In other words, we'd like to navigate to the list of heroes.
 
 We'll need the Angular *Router*.
+### *&lt;base href>*
+
+Open `index.html` and ensure there is a `<base href="...">` element
+(or a script that dynamically sets this element)
+at the top of the `<head>` section.
+
+
+~~~ {.callout.is-important}
+
+
+<header>
+  base href is essential
+</header>
+
+See the *base href* section of the [router](guide/router)
+guide to learn why this matters, and what to add if the `base`
+element is missing.
+
+
+~~~
+
 
 
 {@a configure-routes}
@@ -110,7 +131,7 @@ This *route definition* has the following parts:
  it *must* begin with a capital letter to avoid confusion with the *path* (`Heroes`).</li>
 - **component**: the component that the router should create when navigating to this route (`HeroesComponent`).
 
-Learn more about defining routes with `!{_RoutesVsAtRouteConfig}` in the [Routing](../guide/router.html) chapter.
+Learn more about defining routes with `!{_RoutesVsAtRouteConfig}` in the [Routing](guide/router) chapter.
 ### Router Outlet
 
 If we paste the path, `/heroes`, into the browser address bar,
@@ -301,7 +322,7 @@ using the `Location` service we injected previously.
 
 Going back too far could take us out of the application.
 That's acceptable in a demo. We'd guard against it in a real application,
-perhaps with the [!{_CanDeactivateGuard}](../api/!{_CanDeactivateGuardUri}.html).
+perhaps with the [!{_CanDeactivateGuard}](api/!{_CanDeactivateGuardUri}).
 Then we wire this method with an event binding to a *Back* button that we
 add to the bottom of the component template.
 Modifying the template to add this button spurs us to take one more
@@ -322,7 +343,7 @@ Although the dashboard heroes are presented as button-like blocks, they should b
 When hovering over a hero block, the target URL should display in the browser status bar 
 and the user should be able to copy the link or open the hero detail view in a new tab.
 
-To achieve this effect, reopen the `dashboard.component.html` and replace the repeated `<div *ngFor...>` tags
+To achieve this effect, reopen the <span ngio-ex>dashboard.component.html</span> and replace the repeated `<div *ngFor...>` tags
 with `<a>` tags. The opening `<a>` tag looks like this:
 
 
@@ -331,7 +352,7 @@ with `<a>` tags. The opening `<a>` tag looks like this:
 Notice the `[routerLink]` binding.
 
 Top level navigation in the [`AppComponent`
-template](#router-links) has router links set to fixed !{_pathVsName}s of the
+template](tutorial/toh-pt5#router-links) has router links set to fixed !{_pathVsName}s of the
 destination routes, "/dashboard" and "/heroes".
 
 This time, we're binding to an expression containing a **link parameters !{_array}**.
@@ -374,7 +395,7 @@ Add the following HTML fragment at the bottom of the template where the `<my-her
 After clicking a hero, the user should see something like this below the hero list:
 
 <figure class='image-display'>
-  <img src='/resources/images/devguide/toh/mini-hero-detail.png' alt="Mini Hero Detail" height="70">  </img>
+  <img src='assets/images/devguide/toh/mini-hero-detail.png' alt="Mini Hero Detail" height="70">  </img>
 </figure>
 
 ### Format with the *uppercase* pipe
@@ -384,7 +405,7 @@ that we slipped into the interpolation binding. Look for it right after the pipe
 Pipes are a good way to format strings, currency amounts, dates and other display data.
 Angular ships with several pipes and we can write our own.
 
-Learn about pipes in the [Pipes](../guide/pipes.html) chapter.
+Learn about pipes in the [Pipes](guide/pipes) chapter.
 ### Move content out of the component file
 
 We are not done. We still have to update the component class to support navigation to the
@@ -420,7 +441,7 @@ back in the `DashboardComponent`.
 Here's the fully revised `HeroesComponent` class:
 Refresh the browser and start clicking.
 We can navigate around the app, from the dashboard to hero details and back,
-for heroes list to the mini-detail to the hero details and back to the heroes again.
+from heroes list to the mini-detail to the hero details and back to the heroes again.
 We can jump back and forth between the dashboard and the heroes.
 
 We've met all of the navigational requirements that propelled this chapter.
@@ -469,16 +490,16 @@ It's pretty easy to package it all up and re-use the component somewhere else.
 We can also create styles at the *application level* outside of any component.
 
 Our designers provided some basic styles to apply to elements across the entire app.
-These correspond to the full set of master styles that we installed earlier during [setup](../guide/setup.html).
+These correspond to the full set of master styles that we installed earlier during [setup](guide/setup).
 Here is an excerpt:
 Create the file <span ngio-ex>styles.css</span>, if it doesn't exist already.
-Ensure that it contains the [master styles given here](!{styles_css}).
+Ensure that it contains the [master styles given here](tutorial/!{styles_css}).
 
 If necessary, also edit <span ngio-ex>index.html</span> to refer to this stylesheet.
 Look at the app now. Our dashboard, heroes, and navigation links are styling!
 
 <figure class='image-display'>
-  <img src='/resources/images/devguide/toh/dashboard-top-heroes.png' alt="View navigations">  </img>
+  <img src='assets/images/devguide/toh/dashboard-top-heroes.png' alt="View navigations">  </img>
 </figure>
 
 

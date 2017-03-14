@@ -2,7 +2,7 @@
 HTTP
 
 @intro
-We convert our service and components to use Angular's HTTP service
+We convert our service and components to use Angular's HTTP service.
 
 @description
 Our stakeholders appreciate our progress.
@@ -15,7 +15,7 @@ Run the <live-example></live-example> for this part.
 
 ## Where We Left Off
 
-In the [previous chapter](toh-pt5.html), we learned to navigate between the dashboard and the fixed heroes list, editing a selected hero along the way.
+In the [previous chapter](tutorial/toh-pt5), we learned to navigate between the dashboard and the fixed heroes list, editing a selected hero along the way.
 That's our starting point for this chapter.
 The application runs and updates automatically as we continue to build the Tour of Heroes.
 
@@ -266,7 +266,7 @@ Run the app again, go to the *Dashboard*, and enter some text in the search box.
 At some point it might look like this.
 
 <figure class='image-display'>
-  <img src='/resources/images/devguide/toh/toh-hero-search.png' alt="Hero Search Component">  </img>
+  <img src='assets/images/devguide/toh/toh-hero-search.png' alt="Hero Search Component">  </img>
 </figure>
 
 
@@ -289,5 +289,5 @@ Here are the files we _added or changed_ in this chapter.
 
 ### Next Step
 
-Return to the [learning path](../guide/learning-angular.html#architecture) where 
+Return to the [learning path](guide/learning-angular) where 
 you can read about the concepts and practices you discovered in this tutorial.

@@ -244,7 +244,7 @@ using <a href="https://saucelabs.com/" target="_blank">SauceLabs</a> and
 Angular is built on the latest standards of the web platform.
 Targeting such a wide range of browsers is challenging because they do not support all features of modern browsers.
 
-You compensate by loading polyfill scripts ("polyfills") on the host web page (`index.html`)
+You can compensate by loading polyfill scripts ("polyfills") on the host web page (`index.html`)
 that implement missing features in JavaScript.
 
 {@example 'quickstart/ts/src/index.html' region='polyfills'}
@@ -252,12 +252,12 @@ that implement missing features in JavaScript.
 A particular browser may require at least one polyfill to run _any_ Angular application. 
 You may need additional polyfills for specific features.
 
-The tables below will help you determine which polyfills to load, depending on the browsers you target and the features you use.
+The tables below can help you determine which polyfills to load, depending on the browsers you target and the features you use.
 
 
 ~~~ {.alert.is-important}
 
-The suggested polyfills are the ones we know will run full Angular applications.
+The suggested polyfills are the ones that run full Angular applications.
 You may need additional polyfills to support features not covered by this list.
 Note that polyfills cannot magically transform an old, slow browser into a modern, fast one.
 
@@ -307,7 +307,7 @@ These are the polyfills required to run an Angular application on each supported
 
 
     <td>
-      [ES6](#core-es6)
+      [ES6](guide/browser-support#core-es6)
     </td>
 
 
@@ -322,7 +322,7 @@ These are the polyfills required to run an Angular application on each supported
 
 
     <td>
-      [ES6<br>classList](#classlist)      
+      [ES6<br>classList](guide/browser-support#classlist)      
             
     </td>
 
@@ -370,7 +370,7 @@ Here are the features which may require additional polyfills:
 
 
     <td>
-      [Web Animations](#web-animations)
+      [Web Animations](guide/browser-support#web-animations)
     </td>
 
 
@@ -390,7 +390,7 @@ Here are the features which may require additional polyfills:
 
 
     <td>
-      [Intl API](#intl)
+      [Intl API](guide/browser-support#intl)
     </td>
 
 
@@ -410,7 +410,7 @@ Here are the features which may require additional polyfills:
 
 
     <td>
-             [classList](#classlist)
+             [classList](guide/browser-support#classlist)
     </td>
 
 
@@ -430,7 +430,7 @@ Here are the features which may require additional polyfills:
 
 
     <td>
-             [Typed&nbsp;Array](#typedarray) <br>[Blob](#blob)<br>[FormData](#formdata)
+             [Typed&nbsp;Array](guide/browser-support#typedarray) <br>[Blob](guide/browser-support#blob)<br>[FormData](guide/browser-support#formdata)
     </td>
 
 
@@ -457,7 +457,7 @@ Below are the polyfills which are used to test the framework itself. They are a 
 
 
     <th>
-      Licence
+      License
     </th>
 
 
@@ -517,7 +517,7 @@ Below are the polyfills which are used to test the framework itself. They are a 
 
 
     <td>
-      MIT / Unicode licence
+      MIT / Unicode license
     </td>
 
 
@@ -611,4 +611,5 @@ Below are the polyfills which are used to test the framework itself. They are a 
 
 </table>
 
-\* Figures are for minified and gzipped code, computed with the <a href="http://closure-compiler.appspot.com/home" target="_blank">closure compiler</a>
+\* Figures are for minified and gzipped code, 
+computed with the <a href="http://closure-compiler.appspot.com/home" target="_blank">closure compiler</a>.

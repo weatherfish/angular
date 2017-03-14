@@ -7,7 +7,7 @@ Angular calls lifecycle hook methods on directives and components as it creates,
 @description
 
 <figure>
-  <img src="/resources/images/devguide/lifecycle-hooks/hooks-in-sequence.png" alt="Us" align="left" style="width:200px; margin-left:-40px;margin-right:30px">  </img>
+  <img src="assets/images/devguide/lifecycle-hooks/hooks-in-sequence.png" alt="Us" align="left" style="width:200px; margin-left:-40px;margin-right:30px">  </img>
 </figure>
 
 A component has a lifecycle managed by Angular itself.
@@ -416,7 +416,7 @@ The peek-a-boo exists to show how Angular calls the hooks in the expected order.
 
 This snapshot reflects the state of the log after the user clicked the *Create...* button and then the *Destroy...* button.
 <figure class='image-display'>
-  <img src="/resources/images/devguide/lifecycle-hooks/peek-a-boo.png" alt="Peek-a-boo">  </img>
+  <img src="assets/images/devguide/lifecycle-hooks/peek-a-boo.png" alt="Peek-a-boo">  </img>
 </figure>
 
 The sequence of log messages follows the prescribed hook calling order:
@@ -465,7 +465,7 @@ Each spy's birth and death marks the birth and death of the attached hero `<div>
 with an entry in the *Hook Log* as seen here:
 
 <figure class='image-display'>
-  <img src='/resources/images/devguide/lifecycle-hooks/spy-directive.gif' alt="Spy Directive">  </img>
+  <img src='assets/images/devguide/lifecycle-hooks/spy-directive.gif' alt="Spy Directive">  </img>
 </figure>
 
 Adding a hero results in a new hero `<div>`. The spy's `ngOnInit` logs that event.
@@ -492,7 +492,7 @@ created under test or before you decide to display it.
 Constructors should do no more than set the initial local variables to simple values.
 
 An `ngOnInit` is a good place for a component to fetch its initial data. The
-[Tutorial](../tutorial/toh-pt4.html#oninit) and [HTTP](server-communication.html#oninit) chapter
+[Tutorial](tutorial/toh-pt4) and [HTTP](guide/server-communication) chapter
 show how.
 
 
@@ -523,7 +523,7 @@ This example monitors the `OnChanges` hook.
 {@example 'lifecycle-hooks/ts/src/app/on-changes.component.ts' region='ng-on-changes'}
 
 The `ngOnChanges` method takes an object that maps each changed property name to a
-[SimpleChange](../api/core/index/SimpleChange-class.html) object holding the current and previous property values.
+[SimpleChange](api/core/index/SimpleChange-class) object holding the current and previous property values.
 This hook iterates over the changed properties and logs them.
 
 The example component, `OnChangesComponent`, has two input properties: `hero` and `power`.
@@ -538,7 +538,7 @@ The host `OnChangesParentComponent` binds to them like this:
 Here's the sample in action as the user makes changes.
 
 <figure class='image-display'>
-  <img src='/resources/images/devguide/lifecycle-hooks/on-changes-anim.gif' alt="OnChanges">  </img>
+  <img src='assets/images/devguide/lifecycle-hooks/on-changes-anim.gif' alt="OnChanges">  </img>
 </figure>
 
 The log entries appear as the string value of the *power* property changes. 
@@ -561,7 +561,7 @@ It writes a special message to the log when there are no substantive changes to 
 so you can see how often `DoCheck` is called. The results are illuminating:
 
 <figure class='image-display'>
-  <img src='/resources/images/devguide/lifecycle-hooks/do-check-anim.gif' alt="DoCheck">  </img>
+  <img src='assets/images/devguide/lifecycle-hooks/do-check-anim.gif' alt="DoCheck">  </img>
 </figure>
 
 While the `ngDoCheck` hook can detect when the hero's `name` has changed, it has a frightful cost.
@@ -588,7 +588,7 @@ The `AfterViewComponent` displays this child view *within its template*:
 
 The following hooks take action based on changing values *within the child view*
 which can only be reached by querying for the child view via the property decorated with
-[@ViewChild](../api/core/index/ViewChild-decorator.html).
+[@ViewChild](api/core/index/ViewChild-decorator).
 
 
 {@example 'lifecycle-hooks/ts/src/app/after-view.component.ts' region='hooks'}
@@ -611,7 +611,7 @@ Both of these hooks fire _after_ the component's view has been composed.
 
 Angular throws an error if the hook updates the component's data-bound `comment` property immediately (try it!).Here's *AfterView* in action
 <figure class='image-display'>
-  <img src='/resources/images/devguide/lifecycle-hooks/after-view-anim.gif' alt="AfterView">  </img>
+  <img src='assets/images/devguide/lifecycle-hooks/after-view-anim.gif' alt="AfterView">  </img>
 </figure>
 
 Notice that Angular frequently calls `AfterViewChecked`, often when there are no changes of interest.
@@ -626,7 +626,7 @@ The *AfterContent* sample explores the `AfterContentInit` and `AfterContentCheck
 into the component's template in a designated spot.
 
 AngularJS developers know this technique as *transclusion*.
-Consider this variation on the [previous _AfterView_](#afterview) example.
+Consider this variation on the [previous _AfterView_](guide/lifecycle-hooks#afterview) example.
 This time, instead of including the child view within the template, it imports the content from
 the `AfterContentComponent`'s parent. Here's the parent's template.
 
@@ -644,7 +644,7 @@ The `<ng-content>` tag is a *placeholder* for the external content.
 It tells Angular where to insert that content.
 In this case, the projected content is the `<my-child>` from the parent.
 <figure class='image-display'>
-  <img src='/resources/images/devguide/lifecycle-hooks/projected-child-view.png' width="230" alt="Projected Content">  </img>
+  <img src='assets/images/devguide/lifecycle-hooks/projected-child-view.png' width="230" alt="Projected Content">  </img>
 </figure>
 
 
@@ -661,7 +661,7 @@ projected into the component.
 
 The following *AfterContent* hooks take action based on changing values in a  *content child*
 which can only be reached by querying for it via the property decorated with
-[@ContentChild](../api/core/index/ContentChild-decorator.html).
+[@ContentChild](api/core/index/ContentChild-decorator).
 
 
 {@example 'lifecycle-hooks/ts/src/app/after-content.component.ts' region='hooks'}
@@ -672,7 +672,7 @@ which can only be reached by querying for it via the property decorated with
 ### No unidirectional flow worries with _AfterContent..._
 
 This component's `doSomething` method update's the component's data-bound `comment` property immediately.
-There's no [need to wait](#wait-a-tick).
+There's no [need to wait](guide/lifecycle-hooks#wait-a-tick).
 
 Recall that Angular calls both *AfterContent* hooks before calling either of the *AfterView* hooks.
 Angular completes composition of the projected content *before* finishing the composition of this component's view.

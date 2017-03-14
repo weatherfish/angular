@@ -4,29 +4,41 @@ Use of this source code is governed by an MIT-style license that
 can be found in the LICENSE file at http://angular.io/license
 */
 
-import { NgZone, Injectable } from '@angular/core';
+import { NgZone, Injectable, Type } from '@angular/core';
 import { Observable } from 'rxjs/Observable';
 import { Subject } from 'rxjs/Subject';
 import 'rxjs/add/operator/publishLast';
 import 'rxjs/add/operator/concatMap';
 import { WebWorkerClient } from 'app/shared/web-worker';
 
-export interface QueryResults {
+export interface SearchResults {
   query: string;
-  results: Object[];
+  results: SearchResult[];
 }
 
-const SEARCH_WORKER_URL = 'app/search/search-worker.js';
+export interface SearchResult {
+  path: string;
+  title: string;
+  type: string;
+  titleWords: string;
+  keywords: string;
+}
+
 
 @Injectable()
 export class SearchService {
   private worker: WebWorkerClient;
   private ready: Observable<boolean>;
-  private resultsSubject = new Subject<QueryResults>();
+  private resultsSubject = new Subject<SearchResults>();
   get searchResults() { return this.resultsSubject.asObservable(); }
 
-  constructor(private zone: NgZone) {
-    this.worker = new WebWorkerClient(SEARCH_WORKER_URL, zone);
+  constructor(private zone: NgZone) {}
+
+  initWorker(workerUrl) {
+    this.worker = new WebWorkerClient(new Worker(workerUrl), this.zone);
+  }
+
+  loadIndex() {
     const ready = this.ready = this.worker.sendMessage<boolean>('load-index').publishLast();
     // trigger the index to be loaded immediately
     ready.connect();
@@ -34,7 +46,7 @@ export class SearchService {
 
   search(query: string) {
     this.ready.concatMap(ready => {
-      return this.worker.sendMessage('query-index', query) as Observable<QueryResults>;
+      return this.worker.sendMessage('query-index', query) as Observable<SearchResults>;
     }).subscribe(results => this.resultsSubject.next(results));
   }
 }

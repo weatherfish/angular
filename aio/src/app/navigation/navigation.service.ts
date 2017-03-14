@@ -1,74 +1,91 @@
 import { Injectable } from '@angular/core';
 import { Http } from '@angular/http';
 import { Observable } from 'rxjs/Observable';
+import { AsyncSubject } from 'rxjs/AsyncSubject';
 import { combineLatest } from 'rxjs/observable/combineLatest';
-import 'rxjs/add/operator/publish';
+import 'rxjs/add/operator/publishReplay';
+import 'rxjs/add/operator/publishLast';
 
 import { Logger } from 'app/shared/logger.service';
 import { LocationService } from 'app/shared/location.service';
 
-export interface NavigationNode {
-  url?: string;
-  path?: string;
-  title?: string;
-  tooltip?: string;
-  target?: string;
-  children?: NavigationNode[];
-}
+import { NavigationNode } from './navigation-node';
+export { NavigationNode } from './navigation-node';
 
 export interface NavigationViews {
-  [name: string]: NavigationNode;
+  [name: string]: NavigationNode[];
 }
 
-export interface NavigationMap {
-  [url: string]: NavigationMapItem;
-}
-
-export interface NavigationMapItem {
-  node: NavigationNode;
-  parents: NavigationNode[];
-}
-
-const NAVIGATION_PATH = 'content/navigation.json';
+const navigationPath = 'content/navigation.json';
 
 @Injectable()
 export class NavigationService {
 
-  navigationViews: Observable<NavigationViews>;
-  currentNode: Observable<NavigationNode>;
-  activeNodes: Observable<NavigationNode[]>;
+  /**
+   * An observable collection of NavigationNode trees, which can be used to render navigational menus
+   */
+  navigationViews = this.fetchNavigationViews();
+  /**
+   * An observable array of nodes that indicate which nodes in the `navigationViews` match the current URL location
+   */
+  selectedNodes = this.getSelectedNodes();
 
-  constructor(private http: Http, location: LocationService, private logger: Logger) {
+  constructor(private http: Http, private location: LocationService, private logger: Logger) { }
 
-    this.navigationViews = this.fetchNavigation();
-
-    const currentMapItem = combineLatest(
-                              this.navigationViews.map(this.computeNavMap),
-                              location.currentUrl,
-                              (navMap, url) => navMap[url]);
-
-    this.currentNode = currentMapItem.map(item => item.node).publish();
-    this.activeNodes = currentMapItem.map(item => [item.node, ...item.parents]).publish();
+  /**
+   * Get an observable that fetches the `NavigationViews` from the server.
+   * We create an observable by calling `http.get` but then publish it to share the result
+   * among multiple subscribers, without triggering new requests.
+   * We use `publishLast` because once the http request is complete the request observable completes.
+   * If you use `publish` here then the completed request observable will cause the subscribed observables to complete too.
+   * We `connect` to the published observable to trigger the request immediately.
+   * We could use `.refCount` here but then if the subscribers went from 1 -> 0 -> 1 then you would get
+   * another request to the server.
+   * We are not storing the subscription from connecting as we do not expect this service to be destroyed.
+   */
+  private fetchNavigationViews(): Observable<NavigationViews> {
+    const navigationViews = this.http.get(navigationPath)
+             .map(res => res.json() as NavigationViews)
+             .publishLast();
+    navigationViews.connect();
+    return navigationViews;
   }
 
-  private fetchNavigation(): Observable<NavigationViews> {
-    // TODO: logging and error handling
-    return this.http.get(NAVIGATION_PATH).map(res => res.json() as NavigationViews);
+  /**
+   * Get an observable that will list the nodes that are currently selected
+   * We use `publishReplay(1)` because otherwise subscribers will have to wait until the next
+   * URL change before they receive an emission.
+   * See above for discussion of using `connect`.
+   */
+  private getSelectedNodes() {
+    const selectedNodes = combineLatest(
+      this.navigationViews.map(this.computeUrlToNodesMap),
+      this.location.currentUrl,
+      (navMap, url) => navMap[url] || [])
+      .publishReplay(1);
+    selectedNodes.connect();
+    return selectedNodes;
   }
 
-  private computeNavMap(navigation: NavigationViews): NavigationMap {
-    const navMap: NavigationMap = {};
-    Object.keys(navigation).forEach(key => walk(navigation[key], null));
+  /**
+   * Compute a mapping from URL to an array of nodes, where the first node in the array
+   * is the one that matches the URL and the rest are the ancestors of that node.
+   *
+   * @param navigation A collection of navigation nodes that are to be mapped
+   */
+  private computeUrlToNodesMap(navigation: NavigationViews) {
+    const navMap = {};
+    Object.keys(navigation).forEach(key => navigation[key].forEach(node => walkNodes(node)));
     return navMap;
 
-    function walk(node: NavigationNode, parent: NavigationMapItem) {
-      const item = { node, parents: [parent.node, ...parent.parents] };
-      if (node.path) {
-        // only map to this item if it has a doc associated with it
-        navMap[node.path] = item;
+    function walkNodes(node: NavigationNode, ancestors: NavigationNode[] = []) {
+      const nodes = [node, ...ancestors];
+      if (node.url) {
+        // only map to this node if it has a url associated with it
+        navMap[node.url] = nodes;
       }
       if (node.children) {
-        node.children.forEach(child => walk(child, item));
+        node.children.forEach(child => walkNodes(child, nodes));
       }
     }
   }

@@ -20,7 +20,7 @@ const cheatsheetPackage = require('../cheatsheet-package');
 const rhoPackage = require('../rho-package');
 
 const PROJECT_ROOT = path.resolve(__dirname, '../../..');
-const API_SOURCE_PATH = path.resolve(PROJECT_ROOT, 'modules');
+const API_SOURCE_PATH = path.resolve(PROJECT_ROOT, 'packages');
 const AIO_PATH = path.resolve(PROJECT_ROOT, 'aio');
 const CONTENTS_PATH = path.resolve(AIO_PATH, 'content');
 const TEMPLATES_PATH = path.resolve(AIO_PATH, 'transforms/templates');
@@ -36,7 +36,7 @@ module.exports =
 
         // Register the processors
         .processor(require('./processors/convertPrivateClassesToInterfaces'))
-        .processor(require('./processors/generateNavigationDoc'))
+        .processor(require('./processors/generateApiListDoc'))
         .processor(require('./processors/generateKeywords'))
         .processor(require('./processors/createOverviewDump'))
         .processor(require('./processors/checkUnbalancedBackTicks'))
@@ -64,25 +64,25 @@ module.exports =
           readTypeScriptModules.ignoreExportsMatching = [/^_/];
           readTypeScriptModules.hidePrivateMembers = true;
           readTypeScriptModules.sourceFiles = [
-            '@angular/common/index.ts',
-            '@angular/common/testing/index.ts',
-            '@angular/core/index.ts',
-            '@angular/core/testing/index.ts',
-            '@angular/forms/index.ts',
-            '@angular/http/index.ts',
-            '@angular/http/testing/index.ts',
-            '@angular/platform-browser/index.ts',
-            '@angular/platform-browser/testing/index.ts',
-            '@angular/platform-browser-dynamic/index.ts',
-            '@angular/platform-browser-dynamic/testing/index.ts',
-            '@angular/platform-server/index.ts',
-            '@angular/platform-server/testing/index.ts',
-            '@angular/platform-webworker/index.ts',
-            '@angular/platform-webworker-dynamic/index.ts',
-            '@angular/router/index.ts',
-            '@angular/router/testing/index.ts',
-            '@angular/upgrade/index.ts',
-            '@angular/upgrade/static.ts',
+            'common/index.ts',
+            'common/testing/index.ts',
+            'core/index.ts',
+            'core/testing/index.ts',
+            'forms/index.ts',
+            'http/index.ts',
+            'http/testing/index.ts',
+            'platform-browser/index.ts',
+            'platform-browser/testing/index.ts',
+            'platform-browser-dynamic/index.ts',
+            'platform-browser-dynamic/testing/index.ts',
+            'platform-server/index.ts',
+            'platform-server/testing/index.ts',
+            'platform-webworker/index.ts',
+            'platform-webworker-dynamic/index.ts',
+            'router/index.ts',
+            'router/testing/index.ts',
+            'upgrade/index.ts',
+            'upgrade/static.ts',
           ];
 
           readFilesProcessor.basePath = PROJECT_ROOT;
@@ -105,7 +105,7 @@ module.exports =
             {basePath: CONTENTS_PATH, include: CONTENTS_PATH + '/cheatsheet/*.md'},
             {
               basePath: API_SOURCE_PATH,
-              include: API_SOURCE_PATH + '/@angular/examples/**/*',
+              include: API_SOURCE_PATH + '/examples/**/*',
               fileReader: 'exampleFileReader'
             },
             {
@@ -115,7 +115,7 @@ module.exports =
             },
           ];
 
-          collectExamples.exampleFolders = ['@angular/examples', 'examples'];
+          collectExamples.exampleFolders = ['examples', 'examples'];
 
           generateKeywordsProcessor.ignoreWordsFile = 'aio/transforms/angular.io-package/ignore.words';
           generateKeywordsProcessor.docTypesToIgnore = ['example-region'];
@@ -193,7 +193,7 @@ module.exports =
 
 
 
-        // We are going to be relaxed about ambigous links
+        // We are not going to be relaxed about ambiguous links
         .config(function(getLinkInfo) {
           getLinkInfo.useFirstAmbiguousLink = false;
         })
@@ -201,14 +201,14 @@ module.exports =
 
 
         .config(function(
-            computeIdsProcessor, computePathsProcessor, EXPORT_DOC_TYPES, generateNavigationDoc,
+            computeIdsProcessor, computePathsProcessor, EXPORT_DOC_TYPES, generateApiListDoc,
             generateKeywordsProcessor) {
 
           const API_SEGMENT = 'api';
           const GUIDE_SEGMENT = 'guide';
           const APP_SEGMENT = 'app';
 
-          generateNavigationDoc.outputFolder = APP_SEGMENT;
+          generateApiListDoc.outputFolder = API_SEGMENT;
           generateKeywordsProcessor.outputFolder = APP_SEGMENT;
 
           // Replace any path templates inherited from other packages
@@ -217,21 +217,15 @@ module.exports =
             {
               docTypes: ['module'],
               getPath: function computeModulePath(doc) {
-                doc.moduleFolder =
-                    doc.id.replace(/^@angular\//, API_SEGMENT + '/').replace(/\/index$/, '');
+                doc.moduleFolder = `${API_SEGMENT}/${doc.id.replace(/\/index$/, '')}`;
                 return doc.moduleFolder;
               },
-              outputPathTemplate: '${moduleFolder}/index.json'
+              outputPathTemplate: '${moduleFolder}.json'
             },
             {
               docTypes: EXPORT_DOC_TYPES.concat(['decorator', 'directive', 'pipe']),
               pathTemplate: '${moduleDoc.moduleFolder}/${name}',
               outputPathTemplate: '${moduleDoc.moduleFolder}/${name}.json',
-            },
-            {
-              docTypes: ['api-list-data', 'api-list-audit'],
-              pathTemplate: APP_SEGMENT + '/${docType}.json',
-              outputPathTemplate: '${path}'
             },
             {
               docTypes: ['cheatsheet-data'],

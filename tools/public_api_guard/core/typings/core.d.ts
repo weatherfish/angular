@@ -205,7 +205,7 @@ export declare abstract class CompilerFactory {
 
 /** @experimental */
 export declare type CompilerOptions = {
-    useDebug?: boolean;
+    /** @deprecated */ useDebug?: boolean;
     useJit?: boolean;
     defaultEncapsulation?: ViewEncapsulation;
     providers?: any[];
@@ -717,6 +717,11 @@ export declare abstract class PlatformRef {
     abstract onDestroy(callback: () => void): void;
 }
 
+/** @experimental */
+export interface Predicate<T> {
+    (value: T, index?: number, array?: T[]): boolean;
+}
+
 /** @stable */
 export declare type Provider = TypeProvider | ValueProvider | ClassProvider | ExistingProvider | FactoryProvider | any[];
 
@@ -802,22 +807,7 @@ export declare abstract class Renderer {
 }
 
 /** @experimental */
-export declare abstract class RendererFactoryV2 {
-    abstract createRenderer(hostElement: any, type: RendererTypeV2): RendererV2;
-}
-
-/** @experimental */
-export interface RendererTypeV2 {
-    data: {
-        [kind: string]: any;
-    };
-    encapsulation: ViewEncapsulation;
-    id: string;
-    styles: (string | any[])[];
-}
-
-/** @experimental */
-export declare abstract class RendererV2 {
+export declare abstract class Renderer2 {
     readonly abstract data: {
         [key: string]: any;
     };
@@ -829,18 +819,39 @@ export declare abstract class RendererV2 {
     abstract createText(value: string): any;
     abstract destroy(): void;
     abstract insertBefore(parent: any, newChild: any, refChild: any): void;
-    abstract listen(target: 'window' | 'document' | 'body' | any, eventName: string, callback: (event: any) => boolean): () => void;
+    abstract listen(target: 'window' | 'document' | 'body' | any, eventName: string, callback: (event: any) => boolean | void): () => void;
     abstract nextSibling(node: any): any;
     abstract parentNode(node: any): any;
     abstract removeAttribute(el: any, name: string, namespace?: string): void;
     abstract removeChild(parent: any, oldChild: any): void;
     abstract removeClass(el: any, name: string): void;
-    abstract removeStyle(el: any, style: string, hasVendorPrefix: boolean): void;
+    abstract removeStyle(el: any, style: string, flags?: RendererStyleFlags2): void;
     abstract selectRootElement(selectorOrNode: string | any): any;
     abstract setAttribute(el: any, name: string, value: string, namespace?: string): void;
     abstract setProperty(el: any, name: string, value: any): void;
-    abstract setStyle(el: any, style: string, value: any, hasVendorPrefix: boolean, hasImportant: boolean): void;
+    abstract setStyle(el: any, style: string, value: any, flags?: RendererStyleFlags2): void;
     abstract setValue(node: any, value: string): void;
+}
+
+/** @experimental */
+export declare abstract class RendererFactory2 {
+    abstract createRenderer(hostElement: any, type: RendererType2): Renderer2;
+}
+
+/** @experimental */
+export declare enum RendererStyleFlags2 {
+    Important = 1,
+    DashCase = 2,
+}
+
+/** @experimental */
+export interface RendererType2 {
+    data: {
+        [kind: string]: any;
+    };
+    encapsulation: ViewEncapsulation;
+    id: string;
+    styles: (string | any[])[];
 }
 
 /** @experimental */

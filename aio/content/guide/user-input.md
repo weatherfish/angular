@@ -13,13 +13,13 @@ event binding syntax.
 Run the <live-example></live-example>.
 ## Binding to user input events
 
-You can use [Angular event bindings](./template-syntax.html#event-binding)
+You can use [Angular event bindings](guide/template-syntax)
 to respond to any [DOM event](https://developer.mozilla.org/en-US/docs/Web/Events).
 Many DOM events are triggered by user input. Binding to these events provides a way to
 get input from the user.
 
 To bind to a DOM event, surround the DOM event name in parentheses and assign a quoted
-[template statement](./template-syntax.html#template-statements) to it.
+[template statement](guide/template-syntax) to it.
 
 The following example shows an event binding that implements a click handler:
 
@@ -63,7 +63,7 @@ In this case, `target` refers to the [`<input>` element](https://developer.mozil
 
 After each call, the `onKey()` method appends the contents of the input box value to the list
 in the component's `values` property, followed by a  separator character (|).
-The [interpolation](./template-syntax.html#interpolation)
+The [interpolation](guide/template-syntax)
 displays the accumulating input box changes from the `values` property. 
 
 Suppose the user enters the letters "abc", and then backspaces to remove them one by one.
@@ -74,7 +74,7 @@ Here's what the UI displays:
 
 
 <figure class='image-display'>
-  <img src='/resources/images/devguide/user-input/keyup1-anim.gif' alt="key up 1">  </img>
+  <img src='assets/images/devguide/user-input/keyup1-anim.gif' alt="key up 1">  </img>
 </figure>
 
 
@@ -114,7 +114,7 @@ The next section shows how to use template reference variables to address this p
 
 ## Get user input from a template reference variable
 There's another way to get the user data: use Angular
-[**template reference variables**](./template-syntax.html#ref-vars).
+[**template reference variables**](guide/template-syntax).
 These variables provide direct access to an element from within the template.
 To declare a template reference variable, precede an identifier with a hash (or pound) character (#).
 
@@ -134,7 +134,7 @@ and the component does nothing.
 Type something in the input box, and watch the display update with each keystroke.
 
 <figure class='image-display'>
-  <img src='/resources/images/devguide/user-input/keyup-loop-back-anim.gif' alt="loop back">  </img>
+  <img src='assets/images/devguide/user-input/keyup-loop-back-anim.gif' alt="loop back">  </img>
 </figure>
 
 
@@ -166,7 +166,7 @@ Then Angular calls the event handler only when the user presses _Enter_.
 
 Here's how it works.
 <figure class='image-display'>
-  <img src='/resources/images/devguide/user-input/keyup3-anim.gif' alt="key up 3">  </img>
+  <img src='assets/images/devguide/user-input/keyup3-anim.gif' alt="key up 3">  </img>
 </figure>
 
 
@@ -184,7 +184,7 @@ To fix this issue, listen to both the _Enter_ key and the _blur_ event.
 
 
 ## Put it all together
-The previous page showed how to [display data](./displaying-data.html).
+The previous page showed how to [display data](guide/displaying-data).
 This page demonstrated event binding techniques.
 
 Now, put it all together in a micro-app
@@ -193,7 +193,7 @@ The user can add a hero by typing the hero's name in the input box and
 clicking **Add**.
 
 <figure class='image-display'>
-  <img src='/resources/images/devguide/user-input/little-tour-anim.gif' alt="Little Tour of Heroes">  </img>
+  <img src='assets/images/devguide/user-input/little-tour-anim.gif' alt="Little Tour of Heroes">  </img>
 </figure>
 
 Below is the "Little Tour of Heroes"  component.

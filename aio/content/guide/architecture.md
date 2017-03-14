@@ -2,7 +2,7 @@
 Architecture Overview
 
 @intro
-The basic building blocks of Angular applications
+The basic building blocks of Angular applications.
 
 @description
 You write Angular applications by composing HTML *templates* with Angularized markup,
@@ -17,19 +17,19 @@ Of course, there is more to it than this.
 You'll learn the details in the pages that follow. For now, focus on the big picture.
 
 <figure>
-  <img src="/resources/images/devguide/architecture/overview2.png" alt="overview" style="margin-left:-40px;" width="700">  </img>
+  <img src="assets/images/devguide/architecture/overview2.png" alt="overview" style="margin-left:-40px;" width="700">  </img>
 </figure>
 
 The architecture diagram identifies the eight main building blocks of an Angular application:
 
-* [Modules](#modules)
-* [Components](#components)
-* [Templates](#templates)
-* [Metadata](#metadata)
-* [Data binding](#data-binding)
-* [Directives](#directives)
-* [Services](#services)
-* [Dependency injection](#dependency-injection)
+* [Modules](guide/architecture#modules)
+* [Components](guide/architecture#components)
+* [Templates](guide/architecture#templates)
+* [Metadata](guide/architecture#metadata)
+* [Data binding](guide/architecture#data-binding)
+* [Directives](guide/architecture#directives)
+* [Services](guide/architecture#services)
+* [Dependency injection](guide/architecture#dependency-injection)
 
 Learn these building blocks, and you're on your way.
 
@@ -41,13 +41,13 @@ Learn these building blocks, and you're on your way.
 
 ## Modules
 <figure>
-  <img src="/resources/images/devguide/architecture/module.png" alt="Component" align="left" style="width:240px; margin-left:-40px;margin-right:10px">  </img>
+  <img src="assets/images/devguide/architecture/module.png" alt="Component" align="left" style="width:240px; margin-left:-40px;margin-right:10px">  </img>
 </figure>
 
 ### Angular libraries
 
 <figure>
-  <img src="/resources/images/devguide/architecture/library-module.png" alt="Component" align="left" style="width:240px; margin-left:-40px;margin-right:10px">  </img>
+  <img src="assets/images/devguide/architecture/library-module.png" alt="Component" align="left" style="width:240px; margin-left:-40px;margin-right:10px">  </img>
 </figure>
 
 
@@ -59,7 +59,7 @@ Learn these building blocks, and you're on your way.
 ## Components
 
 <figure>
-  <img src="/resources/images/devguide/architecture/hero-component.png" alt="Component" align="left" style="width:200px; margin-left:-40px;margin-right:10px">  </img>
+  <img src="assets/images/devguide/architecture/hero-component.png" alt="Component" align="left" style="width:200px; margin-left:-40px;margin-right:10px">  </img>
 </figure>
 
 A _component_ controls a patch of screen called a *view*.
@@ -78,7 +78,7 @@ For example, this `HeroListComponent` has a `heroes` property that returns !{_an
 that it acquires from a service.
 `HeroListComponent` also has a `selectHero()` method that sets a `selectedHero` property when the user clicks to choose a hero from that list.
 Angular creates, updates, and destroys components as the user moves through the application.
-Your app can take action at each moment in this lifecycle through optional [lifecycle hooks](lifecycle-hooks.html), like `ngOnInit()` declared above.
+Your app can take action at each moment in this lifecycle through optional [lifecycle hooks](guide/lifecycle-hooks), like `ngOnInit()` declared above.
 
 <div class='l-hr'>
    
@@ -87,7 +87,7 @@ Your app can take action at each moment in this lifecycle through optional [life
 
 ## Templates
 <figure>
-  <img src="/resources/images/devguide/architecture/template.png" alt="Template" align="left" style="width:200px; margin-left:-40px;margin-right:10px">  </img>
+  <img src="assets/images/devguide/architecture/template.png" alt="Template" align="left" style="width:200px; margin-left:-40px;margin-right:10px">  </img>
 </figure>
 
 You define a component's view with its companion **template**. A template is a form of HTML
@@ -99,7 +99,7 @@ template for our `HeroListComponent`:
 
 {@example 'architecture/ts/src/app/hero-list.component.html'}
 
-Although this template uses typical HTML elements like `<h2>` and  `<p>`, it also has some differences. Code like `*ngFor`, `{{hero.name}}`, `(click)`, `[hero]`, and `<hero-detail>` uses Angular's [template syntax](template-syntax.html).
+Although this template uses typical HTML elements like `<h2>` and  `<p>`, it also has some differences. Code like `*ngFor`, `{{hero.name}}`, `(click)`, `[hero]`, and `<hero-detail>` uses Angular's [template syntax](guide/template-syntax).
 
 
 In the last line of the template, the `<hero-detail>` tag is a custom element that represents a new component, `HeroDetailComponent`.
@@ -110,7 +110,7 @@ hero that the user selects from the list presented by the `HeroListComponent`.
 The `HeroDetailComponent` is a **child** of the `HeroListComponent`.
 
 <figure>
-  <img src="/resources/images/devguide/architecture/component-tree.png" alt="Metadata" align="left" style="width:300px; margin-left:-40px;margin-right:10px">  </img>
+  <img src="assets/images/devguide/architecture/component-tree.png" alt="Metadata" align="left" style="width:300px; margin-left:-40px;margin-right:10px">  </img>
 </figure>
 
 Notice how `<hero-detail>` rests comfortably among native HTML elements. Custom components mix seamlessly with native HTML in the same layouts.
@@ -122,11 +122,11 @@ Notice how `<hero-detail>` rests comfortably among native HTML elements. Custom 
 
 ## Metadata
 <figure>
-  <img src="/resources/images/devguide/architecture/metadata.png" alt="Metadata" align="left" style="width:150px; margin-left:-40px;margin-right:10px">  </img>
+  <img src="assets/images/devguide/architecture/metadata.png" alt="Metadata" align="left" style="width:150px; margin-left:-40px;margin-right:10px">  </img>
 </figure>
 
 <p style="padding-top:10px">Metadata tells Angular how to process a class.</p>
-<br class="l-clear-both">[Looking back at the code](#component-code) for `HeroListComponent`, you can see that it's just a class.
+<br class="l-clear-both">[Looking back at the code](guide/architecture#component-code) for `HeroListComponent`, you can see that it's just a class.
 There is no evidence of a framework, no "Angular" in it at all.
 
 In fact, `HeroListComponent` really is *just a class*. It's not a component until you *tell Angular about it*.
@@ -144,13 +144,13 @@ where it finds a `<hero-list>` tag in *parent* HTML.
 For example, if an app's  HTML contains `<hero-list></hero-list>`, then
 Angular inserts an instance of the `HeroListComponent` view between those tags.
 
-- `templateUrl`: module-relative address of this component's HTML template, shown [above](#templates).
+- `templateUrl`: module-relative address of this component's HTML template, shown [above](guide/architecture#templates).
 - `providers`: !{_array} of **dependency injection providers** for services that the component requires.
 This is one way to tell Angular that the component's constructor requires a `HeroService`
 so it can get the list of heroes to display. 
 
 <figure>
-  <img src="/resources/images/devguide/architecture/template-metadata-component.png" alt="Metadata" align="left" style="height:200px; margin-left:-40px;margin-right:10px">  </img>
+  <img src="assets/images/devguide/architecture/template-metadata-component.png" alt="Metadata" align="left" style="height:200px; margin-left:-40px;margin-right:10px">  </img>
 </figure>
 
 The metadata in the `@Component` tells Angular where to get the major building blocks you specify for the component.
@@ -171,21 +171,21 @@ Without a framework, you would be responsible for pushing data values into the H
 into actions and value updates. Writing such push/pull logic by hand is tedious, error-prone, and a nightmare to
 read as any experienced jQuery programmer can attest.
 <figure>
-  <img src="/resources/images/devguide/architecture/databinding.png" alt="Data Binding" style="width:220px; float:left; margin-left:-40px;margin-right:20px">  </img>
+  <img src="assets/images/devguide/architecture/databinding.png" alt="Data Binding" style="width:220px; float:left; margin-left:-40px;margin-right:20px">  </img>
 </figure>
 
 Angular supports **data binding**,
 a mechanism for coordinating parts of a template with parts of a component.
 Add binding markup to the template HTML to tell Angular how to connect both sides.
 
-As the diagram shows, there are four forms of data binding syntax. Each form has a direction &mdash; to the DOM, from the DOM, or in both directions.<br class="l-clear-both">The `HeroListComponent` [example](#templates) template has three forms:
-* The `{{hero.name}}` [*interpolation*](displaying-data.html#interpolation)
+As the diagram shows, there are four forms of data binding syntax. Each form has a direction &mdash; to the DOM, from the DOM, or in both directions.<br class="l-clear-both">The `HeroListComponent` [example](guide/architecture#templates) template has three forms:
+* The `{{hero.name}}` [*interpolation*](guide/displaying-data)
 displays the component's `hero.name` property value within the `<li>` element.
 
-* The `[hero]` [*property binding*](template-syntax.html#property-binding) passes the value of `selectedHero` from
+* The `[hero]` [*property binding*](guide/template-syntax) passes the value of `selectedHero` from
 the parent `HeroListComponent` to the `hero` property of the child `HeroDetailComponent`.
 
-* The `(click)` [*event binding*](user-input.html#click) calls the component's `selectHero` method when the user clicks a hero's name.
+* The `(click)` [*event binding*](guide/user-input) calls the component's `selectHero` method when the user clicks a hero's name.
 
 **Two-way data binding** is an important fourth form
 that combines property and event binding in a single notation, using the `ngModel` directive.
@@ -198,13 +198,13 @@ Angular processes *all* data bindings once per JavaScript event cycle,
 from the root of the application component tree through all child components.
 
 <figure>
-  <img src="/resources/images/devguide/architecture/component-databinding.png" alt="Data Binding" style="float:left; width:300px; margin-left:-40px;margin-right:10px">  </img>
+  <img src="assets/images/devguide/architecture/component-databinding.png" alt="Data Binding" style="float:left; width:300px; margin-left:-40px;margin-right:10px">  </img>
 </figure>
 
 Data binding plays an important role in communication
 between a template and its component.<br class="l-clear-both">
 <figure>
-  <img src="/resources/images/devguide/architecture/parent-child-binding.png" alt="Parent/Child binding" style="float:left; width:300px; margin-left:-40px;margin-right:10px">  </img>
+  <img src="assets/images/devguide/architecture/parent-child-binding.png" alt="Parent/Child binding" style="float:left; width:300px; margin-left:-40px;margin-right:10px">  </img>
 </figure>
 
 Data binding is also important for communication between parent and child components.<br class="l-clear-both">
@@ -215,7 +215,7 @@ Data binding is also important for communication between parent and child compon
 
 ## Directives
 <figure>
-  <img src="/resources/images/devguide/architecture/directive.png" alt="Parent child" style="float:left; width:150px; margin-left:-40px;margin-right:10px">  </img>
+  <img src="assets/images/devguide/architecture/directive.png" alt="Parent child" style="float:left; width:150px; margin-left:-40px;margin-right:10px">  </img>
 </figure>
 
 Angular templates are *dynamic*. When Angular renders them, it transforms the DOM
@@ -234,9 +234,9 @@ sometimes by name but more often as the target of an assignment or a binding.
 
 **Structural** directives alter layout by adding, removing, and replacing elements in DOM.
 
-The [example template](#templates) uses two built-in structural directives:
-* [`*ngFor`](displaying-data.html#ngFor) tells Angular to stamp out one `<li>` per hero in the `heroes` list.
-* [`*ngIf`](displaying-data.html#ngIf) includes the `HeroDetail` component only if a selected hero exists.
+The [example template](guide/architecture#templates) uses two built-in structural directives:
+* [`*ngFor`](guide/displaying-data) tells Angular to stamp out one `<li>` per hero in the `heroes` list.
+* [`*ngIf`](guide/displaying-data) includes the `HeroDetail` component only if a selected hero exists.
 **Attribute** directives alter the appearance or behavior of an existing element.
 In templates they look like regular HTML attributes, hence the name.
 
@@ -245,9 +245,9 @@ an example of an attribute directive. `ngModel` modifies the behavior of
 an existing element (typically an `<input>`)
 by setting its display value property and responding to change events.
 Angular has a few more directives that either alter the layout structure
-(for example, [ngSwitch](template-syntax.html#ngSwitch))
+(for example, [ngSwitch](guide/template-syntax))
 or modify aspects of DOM elements and components
-(for example, [ngStyle](template-syntax.html#ngStyle) and [ngClass](template-syntax.html#ngClass)).
+(for example, [ngStyle](guide/template-syntax) and [ngClass](guide/template-syntax)).
 
 Of course, you can also write your own directives. Components such as
 `HeroListComponent` are one kind of custom directive.
@@ -260,7 +260,7 @@ Of course, you can also write your own directives. Components such as
 
 ## Services
 <figure>
-  <img src="/resources/images/devguide/architecture/service.png" alt="Service" style="float:left; margin-left:-40px;margin-right:10px">  </img>
+  <img src="assets/images/devguide/architecture/service.png" alt="Service" style="float:left; margin-left:-40px;margin-right:10px">  </img>
 </figure>
 
 _Service_ is a broad category encompassing any value, function, or feature that your application needs.
@@ -305,7 +305,7 @@ application logic into services and make those services available to components 
 
 ## Dependency injection
 <figure>
-  <img src="/resources/images/devguide/architecture/dependency-injection.png" alt="Service" style="float:left; width:200px; margin-left:-40px;margin-right:10px">  </img>
+  <img src="assets/images/devguide/architecture/dependency-injection.png" alt="Service" style="float:left; width:200px; margin-left:-40px;margin-right:10px">  </img>
 </figure>
 
 _Dependency injection_ is a way to supply a new instance of a class
@@ -324,7 +324,7 @@ This is *dependency injection*.
 
 The process of `HeroService` injection looks a bit like this:
 <figure>
-  <img src="/resources/images/devguide/architecture/injector-injects.png" alt="Service">  </img>
+  <img src="assets/images/devguide/architecture/injector-injects.png" alt="Service">  </img>
 </figure>
 
 If the injector doesn't have a `HeroService`, how does it know how to make one?
@@ -336,7 +336,7 @@ Registering at a component level means you get a new instance of the
 service with each new instance of that component.
 
 <!-- We've vastly oversimplified dependency injection for this overview.
-The full story is in the [dependency injection](dependency-injection.html) page. -->
+The full story is in the [dependency injection](guide/dependency-injection) page. -->
 
 Points to remember about dependency injection:
 
@@ -359,14 +359,14 @@ Points to remember about dependency injection:
 
 You've learned the basics about the eight main building blocks of an Angular application:
 
-* [Modules](#modules)
-* [Components](#components)
-* [Templates](#templates)
-* [Metadata](#metadata)
-* [Data binding](#data-binding)
-* [Directives](#directives)
-* [Services](#services)
-* [Dependency injection](#dependency-injection)
+* [Modules](guide/architecture#modules)
+* [Components](guide/architecture#components)
+* [Templates](guide/architecture#templates)
+* [Metadata](guide/architecture#metadata)
+* [Data binding](guide/architecture#data-binding)
+* [Directives](guide/architecture#directives)
+* [Services](guide/architecture#services)
+* [Dependency injection](guide/architecture#dependency-injection)
 
 That's a foundation for everything else in an Angular application,
 and it's more than enough to get going.
@@ -375,7 +375,7 @@ But it doesn't include everything you need to know.
 Here is a brief, alphabetical list of other important Angular features and services.
 Most of them are covered in this documentation (or soon will be).
 
-> [**Animations**](animations.html): Animate component behavior
+> [**Animations**](guide/animations): Animate component behavior
 without deep knowledge of animation techniques or CSS with Angular's animation library.
 
 > **Change detection**: The change detection documentation will cover how Angular decides that a component property value has changed,
@@ -384,18 +384,18 @@ when to update the screen, and how it uses **zones** to intercept asynchronous a
 > **Events**: The events documentation will cover how to use components and services to raise events with mechanisms for
 publishing and subscribing to events.
 
-> [**Forms**](forms.html): Support complex data entry scenarios with HTML-based validation and dirty checking.
+> [**Forms**](guide/forms): Support complex data entry scenarios with HTML-based validation and dirty checking.
 
-> [**HTTP**](server-communication.html): Communicate with a server to get data, save data, and invoke server-side actions with an HTTP client.
+> [**HTTP**](guide/server-communication): Communicate with a server to get data, save data, and invoke server-side actions with an HTTP client.
 
-> [**Lifecycle hooks**](lifecycle-hooks.html): Tap into key moments in the lifetime of a component, from its creation to its destruction,
+> [**Lifecycle hooks**](guide/lifecycle-hooks): Tap into key moments in the lifetime of a component, from its creation to its destruction,
 by implementing the lifecycle hook interfaces.
 
-> [**Pipes**](pipes.html): Use pipes in your templates to improve the user experience by transforming values for display. Consider this `currency` pipe expression:
+> [**Pipes**](guide/pipes): Use pipes in your templates to improve the user experience by transforming values for display. Consider this `currency` pipe expression:
 >
 > > `price | currency:'USD':true`
 >
 > It displays a price of 42.33 as `$42.33`.
 
-> [**Router**](router.html): Navigate from page to page within the client
+> [**Router**](guide/router): Navigate from page to page within the client
   application and never leave the browser.

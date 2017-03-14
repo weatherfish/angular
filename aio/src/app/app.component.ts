@@ -1,116 +1,49 @@
 import { Component, ViewChild, OnInit } from '@angular/core';
 import { Observable } from 'rxjs/Observable';
+
+import { GaService } from 'app/shared/ga.service';
+import { LocationService } from 'app/shared/location.service';
 import { DocumentService, DocumentContents } from 'app/documents/document.service';
-import { NavigationService, NavigationViews } from 'app/navigation/navigation.service';
-import { SearchService, QueryResults } from 'app/search/search.service';
+import { NavigationService, NavigationViews, NavigationNode } from 'app/navigation/navigation.service';
+import { SearchService } from 'app/search/search.service';
 
 @Component({
   selector: 'aio-shell',
-  template: `
-    <md-toolbar color="primary" class="app-toolbar">
-      <button *ngIf="isHamburgerVisible" class="hamburger" md-button (click)="sidenav.toggle()"><md-icon>menu</md-icon></button>
-      <aio-top-menu [nodes]="(navigationViews | async)?.TopBar"></aio-top-menu>
-      <md-input-container >
-        <input mdInput placeholder="Search" (keyup)="onSearch($event)">
-      </md-input-container>
-      <span class="fill-remaining-space"></span>
-    </md-toolbar>
-
-    <md-sidenav-container class="sidenav-container" (window:resize)="onResize($event.target.innerWidth)">
-
-      <md-sidenav #sidenav class="sidenav" [opened]="isSideBySide" [mode] = "this.isSideBySide ? 'side' : 'over'">
-        <aio-nav-menu [nodes]="(navigationViews | async)?.SideNav"></aio-nav-menu>
-      </md-sidenav>
-
-      <section class="sidenav-content">
-        <div class="search-results">
-          <div *ngFor="let result of (searchResults | async)?.results">
-            <a href="{{ result.path }}">{{ result.title }}</a>
-          </div>
-        </div>
-        <aio-doc-viewer [doc]="currentDocument | async"></aio-doc-viewer>
-      </section>
-
-    </md-sidenav-container>`,
-  styles:  [
-    `.fill-remaining-space {
-        flex: 1 1 auto;
-      }
-
-      md-input-container {
-        margin-left: 10px;
-        input {
-          min-width:200px;
-        }
-      }
-
-
-      .md-input-element {
-        font-size: 70%;
-        font-style: italic;
-      }
-
-      @media (max-width: 600px) {
-        aio-menu {
-          display: none;
-        }
-      }
-
-      .sidenav-container {
-        width: 100%;
-        height: 100vh;
-      }
-
-      .sidenav-content {
-        height: 100%;
-        width: 100%;
-        margin: auto;
-        padding: 1rem;
-      }
-
-      .sidenav-content button {
-        min-width: 50px;
-      }
-
-      .sidenav {
-        padding: 0;
-      }
-
-      // md-toolbar {
-      //   display: none;
-      //   padding-left: 10px !important;
-      // }
-      // md-toolbar.active {
-      //   display: block;
-      // }`
-  ]
+  templateUrl: './app.component.html',
+  styleUrls:  ['./app.component.scss'],
 })
 export class AppComponent implements OnInit {
+  readonly sideBySideWidth = 600;
+  readonly homeImageUrl = 'assets/images/logos/angular2/angular_solidBlack.svg';
+
   isHamburgerVisible = true; // always ... for now
   isSideBySide = false;
-  sideBySideWidth = 600;
 
   currentDocument: Observable<DocumentContents>;
   navigationViews: Observable<NavigationViews>;
-  searchResults: Observable<QueryResults>;
+  selectedNodes: Observable<NavigationNode[]>;
 
-  constructor(documentService: DocumentService, navigationService: NavigationService, private searchService: SearchService) {
+  constructor(
+    documentService: DocumentService,
+    gaService: GaService,
+    locationService: LocationService,
+    navigationService: NavigationService,
+    private searchService: SearchService) {
+
     this.currentDocument = documentService.currentDocument;
+    locationService.currentUrl.subscribe(url => gaService.locationChanged(url));
     this.navigationViews = navigationService.navigationViews;
-    this.searchResults = searchService.searchResults;
+    this.selectedNodes = navigationService.selectedNodes;
   }
 
   ngOnInit() {
+    this.searchService.initWorker('app/search/search-worker.js');
+    this.searchService.loadIndex();
+
     this.onResize(window.innerWidth);
   }
 
   onResize(width) {
     this.isSideBySide = width > this.sideBySideWidth;
-  }
-
-  onSearch(event: KeyboardEvent) {
-    const query = (event.target as HTMLInputElement).value;
-    console.log(query);
-    this.searchService.search(query);
   }
 }

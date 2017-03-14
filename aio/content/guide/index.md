@@ -2,11 +2,11 @@
 Documentation Overview
 
 @intro
-How to read and use this documentation
+How to read and use this documentation.
 
 @description
 This page describes the Angular documentation at a high level.
-If you're new to Angular, you may want to visit "[Learning Angular](learning-angular.html)" first.
+If you're new to Angular, you may want to visit "[Learning Angular](guide/learning-angular)" first.
 
 ## Themes
 
@@ -132,17 +132,20 @@ Each page includes code snippets from a sample application that accompanies the 
 You can reuse these snippets in your applications.
 
 Look for a link to a running version of that sample, often near the top of the page,
-such as this <live-example name="architecture"></live-example> from the [Architecture](architecture.html) page.
+such as this <live-example nodownload name="architecture"></live-example> from the [Architecture](guide/architecture) page.
 <span if-docs="ts">
 The link launches a browser-based, code editor where you can inspect, modify, save, and download the code.
 </span>
 
+Alternatively, you can run the example locally, next to those `live-example` links you have a <a href="/resources/zips/architecture/architecture.zip">download link</a>.
+Just download, unzip, run `npm install` to install the dependencies and run it with `npm start`.
+
 ## Reference pages
 
-* The [Cheat Sheet](cheatsheet.html) lists Angular syntax for common scenarios.
-* The [Glossary](glossary.html) defines terms that Angular developers should know.
-<li if-docs="ts">The [Change Log](change-log.html) announces what's new and changed in the documentation.</li>
-* The [API Reference](../api/) is the authority on every public-facing member of the Angular libraries.
+* The [Cheat Sheet](guide/cheatsheet) lists Angular syntax for common scenarios.
+* The [Glossary](guide/glossary) defines terms that Angular developers should know.
+<li if-docs="ts">The [Change Log](guide/change-log) announces what's new and changed in the documentation.</li>
+* The [API Reference](api/) is the authority on every public-facing member of the Angular libraries.
 
 ## Feedback
 
