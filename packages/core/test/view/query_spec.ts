@@ -8,7 +8,7 @@
 
 import {ElementRef, Injector, QueryList, RenderComponentType, RootRenderer, Sanitizer, SecurityContext, TemplateRef, ViewContainerRef, ViewEncapsulation, getDebugNode} from '@angular/core';
 import {getDebugContext} from '@angular/core/src/errors';
-import {BindingType, DebugContext, NodeDef, NodeFlags, QueryBindingType, QueryValueType, RootData, Services, ViewData, ViewDefinition, ViewDefinitionFactory, ViewFlags, ViewHandleEventFn, ViewUpdateFn, anchorDef, asElementData, asProviderData, attachEmbeddedView, detachEmbeddedView, directiveDef, elementDef, queryDef, rootRenderNodes, textDef, viewDef} from '@angular/core/src/view/index';
+import {BindingFlags, DebugContext, NodeDef, NodeFlags, QueryBindingType, QueryValueType, RootData, Services, ViewData, ViewDefinition, ViewDefinitionFactory, ViewFlags, ViewHandleEventFn, ViewUpdateFn, anchorDef, asElementData, asProviderData, attachEmbeddedView, detachEmbeddedView, directiveDef, elementDef, queryDef, rootRenderNodes, textDef, viewDef} from '@angular/core/src/view/index';
 import {inject} from '@angular/core/testing';
 import {getDOM} from '@angular/platform-browser/src/dom/dom_adapter';
 
@@ -369,37 +369,6 @@ export function main() {
     });
 
     describe('general binding behavior', () => {
-      it('should checkNoChanges', () => {
-        const {view} = createAndGetRootNodes(compViewDef([
-          elementDef(NodeFlags.None, null, null, 3, 'div'),
-          ...contentQueryProviders(),
-          anchorDef(NodeFlags.EmbeddedViews, null, null, 0, null, embeddedViewDef([
-                      elementDef(NodeFlags.None, null, null, 1, 'div'),
-                      aServiceProvider(),
-                    ])),
-        ]));
-
-        Services.checkAndUpdateView(view);
-        Services.checkNoChangesView(view);
-
-        const childView = Services.createEmbeddedView(view, view.def.nodes[3]);
-        attachEmbeddedView(view, asElementData(view, 3), 0, childView);
-
-        let err: any;
-        try {
-          Services.checkNoChangesView(view);
-        } catch (e) {
-          err = e;
-        }
-        expect(err).toBeTruthy();
-        expect(err.message)
-            .toBe(
-                `ExpressionChangedAfterItHasBeenCheckedError: Expression has changed after it was checked. Previous value: 'Query 1 not dirty'. Current value: 'Query 1 dirty'.`);
-        const debugCtx = getDebugContext(err);
-        expect(debugCtx.view).toBe(view);
-        expect(debugCtx.nodeIndex).toBe(2);
-      });
-
       it('should report debug info on binding errors', () => {
         class QueryService {
           set a(value: any) { throw new Error('Test'); }

@@ -1537,24 +1537,21 @@ export function main() {
              const elementC = html(`<ng2-c></ng2-c>`);
 
              bootstrap(platformBrowserDynamic(), Ng2Module, elementA, ng1Module).then(() => {
-               expect(mockExceptionHandler).toHaveBeenCalledWith(jasmine.objectContaining({
-                 ngOriginalError: new Error(
-                     'Unable to find required \'iDoNotExist\' in upgraded directive \'ng1A\'.')
-               }));
+               expect(mockExceptionHandler)
+                   .toHaveBeenCalledWith(new Error(
+                       'Unable to find required \'iDoNotExist\' in upgraded directive \'ng1A\'.'));
              });
 
              bootstrap(platformBrowserDynamic(), Ng2Module, elementB, ng1Module).then(() => {
-               expect(mockExceptionHandler).toHaveBeenCalledWith(jasmine.objectContaining({
-                 ngOriginalError: new Error(
-                     'Unable to find required \'^iDoNotExist\' in upgraded directive \'ng1B\'.')
-               }));
+               expect(mockExceptionHandler)
+                   .toHaveBeenCalledWith(new Error(
+                       'Unable to find required \'^iDoNotExist\' in upgraded directive \'ng1B\'.'));
              });
 
              bootstrap(platformBrowserDynamic(), Ng2Module, elementC, ng1Module).then(() => {
-               expect(mockExceptionHandler).toHaveBeenCalledWith(jasmine.objectContaining({
-                 ngOriginalError: new Error(
-                     'Unable to find required \'^^iDoNotExist\' in upgraded directive \'ng1C\'.')
-               }));
+               expect(mockExceptionHandler)
+                   .toHaveBeenCalledWith(new Error(
+                       'Unable to find required \'^^iDoNotExist\' in upgraded directive \'ng1C\'.'));
              });
            }));
 
@@ -2630,12 +2627,10 @@ export function main() {
            }
 
            // Define `ng1Module`
-           const ng1Module =
-               angular.module('ng1Module', [])
-                   .directive('ng1A', () => ng1DirectiveA)
-                   .directive('ng1B', () => ng1DirectiveB)
-                   .directive(
-                       'ng2', downgradeComponent({component: Ng2Component, inputs: ['show']}));
+           const ng1Module = angular.module('ng1Module', [])
+                                 .directive('ng1A', () => ng1DirectiveA)
+                                 .directive('ng1B', () => ng1DirectiveB)
+                                 .directive('ng2', downgradeComponent({component: Ng2Component}));
 
            // Define `Ng2Module`
            @NgModule({
@@ -2732,12 +2727,10 @@ export function main() {
            }
 
            // Define `ng1Module`
-           const ng1Module =
-               angular.module('ng1Module', [])
-                   .directive('ng1A', () => ng1DirectiveA)
-                   .directive('ng1B', () => ng1DirectiveB)
-                   .directive(
-                       'ng2', downgradeComponent({component: Ng2Component, inputs: ['show']}));
+           const ng1Module = angular.module('ng1Module', [])
+                                 .directive('ng1A', () => ng1DirectiveA)
+                                 .directive('ng1B', () => ng1DirectiveB)
+                                 .directive('ng2', downgradeComponent({component: Ng2Component}));
 
            // Define `Ng2Module`
            @NgModule({
@@ -3089,11 +3082,7 @@ export function main() {
          const ng1Module = angular.module('ng1', [])
                                .component('ng1X', ng1Component)
                                .directive('ng2A', downgradeComponent({component: Ng2ComponentA}))
-                               .directive('ng2B', downgradeComponent({
-                                            component: Ng2ComponentB,
-                                            inputs: ['ng2BInputA: ng2BInput1', 'ng2BInputC'],
-                                            outputs: ['ng2BOutputC']
-                                          }));
+                               .directive('ng2B', downgradeComponent({component: Ng2ComponentB}));
 
          // Define `Ng2Module`
          @NgModule({

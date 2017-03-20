@@ -27,11 +27,26 @@ function _notImplemented(methodName: string) {
   return new Error('This method is not implemented in Parse5DomAdapter: ' + methodName);
 }
 
+function _getElement(el: any, name: string) {
+  for (let i = 0; i < el.childNodes.length; i++) {
+    let node = el.childNodes[i];
+    if (node.name === name) {
+      return node;
+    }
+  }
+  return null;
+}
+
 /**
  * Parses a document string to a Document object.
  */
 export function parseDocument(html: string) {
-  return parse5.parse(html, {treeAdapter: parse5.treeAdapters.htmlparser2});
+  let doc = parse5.parse(html, {treeAdapter: parse5.treeAdapters.htmlparser2});
+  let docElement = _getElement(doc, 'html');
+  doc['head'] = _getElement(docElement, 'head');
+  doc['body'] = _getElement(docElement, 'body');
+  doc['_window'] = {};
+  return doc;
 }
 
 
@@ -46,6 +61,15 @@ export class Parse5DomAdapter extends DomAdapter {
   static makeCurrent() {
     treeAdapter = parse5.treeAdapters.htmlparser2;
     setRootDomAdapter(new Parse5DomAdapter());
+  }
+
+  contains(nodeA: any, nodeB: any): boolean {
+    let inner = nodeB;
+    while (inner) {
+      if (inner === nodeA) return true;
+      inner = inner.parent;
+    }
+    return false;
   }
 
   hasProperty(element: any, name: string): boolean {
@@ -412,8 +436,12 @@ export class Parse5DomAdapter extends DomAdapter {
       const styleList = styleAttrValue.split(/;+/g);
       for (let i = 0; i < styleList.length; i++) {
         if (styleList[i].length > 0) {
-          const elems = styleList[i].split(/:+/g);
-          (styleMap as any)[elems[0].trim()] = elems[1].trim();
+          const style = styleList[i] as string;
+          const colon = style.indexOf(':');
+          if (colon === -1) {
+            throw new Error(`Invalid CSS style: ${style}`);
+          }
+          (styleMap as any)[style.substr(0, colon).trim()] = style.substr(colon + 1).trim();
         }
       }
     }
@@ -453,11 +481,15 @@ export class Parse5DomAdapter extends DomAdapter {
   hasAttribute(element: any, attribute: string): boolean {
     return element.attribs && element.attribs[attribute] != null;
   }
-  hasAttributeNS(element: any, ns: string, attribute: string): boolean { throw 'not implemented'; }
+  hasAttributeNS(element: any, ns: string, attribute: string): boolean {
+    return this.hasAttribute(element, attribute);
+  }
   getAttribute(element: any, attribute: string): string {
     return this.hasAttribute(element, attribute) ? element.attribs[attribute] : null;
   }
-  getAttributeNS(element: any, ns: string, attribute: string): string { throw 'not implemented'; }
+  getAttributeNS(element: any, ns: string, attribute: string): string {
+    return this.getAttribute(element, attribute);
+  }
   setAttribute(element: any, attribute: string, value: string) {
     if (attribute) {
       element.attribs[attribute] = value;
@@ -467,7 +499,7 @@ export class Parse5DomAdapter extends DomAdapter {
     }
   }
   setAttributeNS(element: any, ns: string, attribute: string, value: string) {
-    throw 'not implemented';
+    this.setAttribute(element, attribute, value);
   }
   removeAttribute(element: any, attribute: string) {
     if (attribute) {
@@ -505,7 +537,7 @@ export class Parse5DomAdapter extends DomAdapter {
   isShadowRoot(node: any): boolean { return this.getShadowRoot(node) == node; }
   importIntoDoc(node: any): any { return this.clone(node); }
   adoptNode(node: any): any { return node; }
-  getHref(el: any): string { return el.href; }
+  getHref(el: any): string { return this.getAttribute(el, 'href'); }
   resolveAndSetHref(el: any, baseUrl: string, href: string) {
     if (href == null) {
       el.href = baseUrl;

@@ -6,6 +6,7 @@
  * found in the LICENSE file at https://angular.io/license
  */
 import * as chars from './chars';
+import {CompileIdentifierMetadata, identifierModuleUrl, identifierName} from './compile_metadata';
 
 export class ParseLocation {
   constructor(
@@ -109,18 +110,29 @@ export class ParseSourceSpan {
 
 export enum ParseErrorLevel {
   WARNING,
-  FATAL
+  ERROR,
 }
 
 export class ParseError {
   constructor(
       public span: ParseSourceSpan, public msg: string,
-      public level: ParseErrorLevel = ParseErrorLevel.FATAL) {}
+      public level: ParseErrorLevel = ParseErrorLevel.ERROR) {}
 
   toString(): string {
     const ctx = this.span.start.getContext(100, 3);
-    const contextStr = ctx ? ` ("${ctx.before}[ERROR ->]${ctx.after}")` : '';
+    const contextStr =
+        ctx ? ` ("${ctx.before}[${ParseErrorLevel[this.level]} ->]${ctx.after}")` : '';
     const details = this.span.details ? `, ${this.span.details}` : '';
     return `${this.msg}${contextStr}: ${this.span.start}${details}`;
   }
+}
+
+export function typeSourceSpan(kind: string, type: CompileIdentifierMetadata): ParseSourceSpan {
+  const moduleUrl = identifierModuleUrl(type);
+  const sourceFileName = moduleUrl != null ? `in ${kind} ${identifierName(type)} in ${moduleUrl}` :
+                                             `in ${kind} ${identifierName(type)}`;
+  const sourceFile = new ParseSourceFile('', sourceFileName);
+  return new ParseSourceSpan(
+      new ParseLocation(sourceFile, null, null, null),
+      new ParseLocation(sourceFile, null, null, null));
 }

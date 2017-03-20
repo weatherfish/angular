@@ -12,13 +12,14 @@ import {JavaScriptEmitter} from '@angular/compiler/src/output/js_emitter';
 import * as o from '@angular/compiler/src/output/output_ast';
 import {ImportResolver} from '@angular/compiler/src/output/path_util';
 
-import {stripSourceMap} from './abstract_emitter_spec';
+import {stripSourceMapAndNewLine} from './abstract_emitter_spec';
 
-const someModuleUrl = 'somePackage/somePath';
+const someGenFilePath = 'somePackage/someGenFile';
+const someSourceFilePath = 'somePackage/someSourceFile';
 const anotherModuleUrl = 'somePackage/someOtherPath';
 
 const sameModuleIdentifier: CompileIdentifierMetadata = {
-  reference: new StaticSymbol(someModuleUrl, 'someLocalId', [])
+  reference: new StaticSymbol(someGenFilePath, 'someLocalId', [])
 };
 const externalModuleIdentifier: CompileIdentifierMetadata = {
   reference: new StaticSymbol(anotherModuleUrl, 'someExternalId', [])
@@ -48,9 +49,10 @@ export function main() {
       someVar = o.variable('someVar');
     });
 
-    function emitStmt(stmt: o.Statement, exportedVars: string[] = null): string {
-      const source = emitter.emitStatements(someModuleUrl, [stmt], exportedVars || []);
-      return stripSourceMap(source);
+    function emitStmt(stmt: o.Statement, exportedVars: string[] = null, preamble?: string): string {
+      const source = emitter.emitStatements(
+          someSourceFilePath, someGenFilePath, [stmt], exportedVars || [], preamble);
+      return stripSourceMapAndNewLine(source);
     }
 
     it('should declare variables', () => {
@@ -299,6 +301,12 @@ export function main() {
               '  var self = this;', '  self.someMethod();', '};'
             ].join('\n'));
       });
+    });
+
+    it('should support a preamble', () => {
+      expect(emitStmt(o.variable('a').toStmt(), [], '/* SomePreamble */')).toBe([
+        '/* SomePreamble */', 'a;'
+      ].join('\n'));
     });
   });
 }

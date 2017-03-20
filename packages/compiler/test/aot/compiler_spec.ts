@@ -6,12 +6,15 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {AotCompiler, AotCompilerHost, AotCompilerOptions, createAotCompiler} from '@angular/compiler';
+import {AotCompiler, AotCompilerHost, AotCompilerOptions, GeneratedFile, createAotCompiler} from '@angular/compiler';
 import {RenderComponentType, ɵReflectionCapabilities as ReflectionCapabilities, ɵreflector as reflector} from '@angular/core';
 import {async} from '@angular/core/testing';
 import {MetadataBundler, MetadataCollector, ModuleMetadata, privateEntriesToIndex} from '@angular/tsc-wrapped';
 import * as ts from 'typescript';
-import {EmittingCompilerHost, MockAotCompilerHost, MockCompilerHost, MockData, MockMetadataBundlerHost, settings} from './test_util';
+
+import {extractSourceMap, originalPositionFor} from '../output/source_map_util';
+
+import {EmittingCompilerHost, MockAotCompilerHost, MockCompilerHost, MockData, MockDirectory, MockMetadataBundlerHost, settings} from './test_util';
 
 const DTS = /\.d\.ts$/;
 
@@ -39,6 +42,9 @@ describe('compiler (unbundled Angular)', () => {
     angularFiles = emittingHost.written;
   });
 
+  // Restore reflector since AoT compiler will update it with a new static reflector
+  afterEach(() => { reflector.updateCapabilities(new ReflectionCapabilities()); });
+
   describe('Quickstart', () => {
     let host: MockCompilerHost;
     let aotHost: MockAotCompilerHost;
@@ -47,9 +53,6 @@ describe('compiler (unbundled Angular)', () => {
       host = new MockCompilerHost(QUICKSTART, FILES, angularFiles);
       aotHost = new MockAotCompilerHost(host);
     });
-
-    // Restore reflector since AoT compiler will update it with a new static reflector
-    afterEach(() => { reflector.updateCapabilities(new ReflectionCapabilities()); });
 
     it('should compile',
        async(() => compile(host, aotHost, expectNoDiagnostics).then(generatedFiles => {
@@ -66,6 +69,275 @@ describe('compiler (unbundled Angular)', () => {
          expect(generatedFiles.find(f => /app\.module\.ngfactory\.ts/.test(f.genFileUrl)))
              .toBeDefined();
        })));
+  });
+
+  describe('aot source mapping', () => {
+    const componentPath = '/app/app.component.ts';
+    const ngComponentPath = 'ng:///app/app.component.ts'
+
+    let rootDir: MockDirectory;
+    let appDir: MockDirectory;
+
+    beforeEach(() => {
+      appDir = {
+        'app.module.ts': `
+              import { NgModule }      from '@angular/core';
+
+              import { AppComponent }  from './app.component';
+
+              @NgModule({
+                declarations: [ AppComponent ],
+                bootstrap:    [ AppComponent ]
+              })
+              export class AppModule { }
+            `
+      };
+      rootDir = {'app': appDir};
+    });
+
+    function compileApp(): Promise<GeneratedFile> {
+      return new Promise((resolve, reject) => {
+        const host = new MockCompilerHost(['/app/app.module.ts'], rootDir, angularFiles);
+        const aotHost = new MockAotCompilerHost(host);
+        let result: GeneratedFile[];
+        let error: Error;
+        resolve(compile(host, aotHost, expectNoDiagnostics, expectNoDiagnostics)
+                    .then(
+                        (files) => files.find(
+                            genFile => genFile.srcFileUrl === componentPath &&
+                                genFile.genFileUrl.endsWith('.ts'))));
+      });
+    }
+
+    function findLineAndColumn(file: string, token: string): {line: number, column: number} {
+      const index = file.indexOf(token);
+      if (index === -1) {
+        return {line: null, column: null};
+      }
+      const linesUntilToken = file.slice(0, index).split('\n');
+      const line = linesUntilToken.length;
+      const column = linesUntilToken[linesUntilToken.length - 1].length;
+      return {line, column};
+    }
+
+    function createComponentSource(componentDecorator: string) {
+      return `
+        import { NgModule, Component } from '@angular/core';
+
+        @Component({
+          ${componentDecorator}
+        })
+        export class AppComponent {
+          someMethod() {}
+        }
+      `;
+    }
+
+    describe('inline templates', () => {
+      const ngUrl = `${ngComponentPath}.AppComponent.html`;
+
+      function templateDecorator(template: string) { return `template: \`${template}\`,`; }
+
+      declareTests({ngUrl, templateDecorator});
+    });
+
+    describe('external templates', () => {
+      const ngUrl = 'ng:///app/app.component.html';
+      const templateUrl = '/app/app.component.html';
+
+      function templateDecorator(template: string) {
+        appDir['app.component.html'] = template;
+        return `templateUrl: 'app.component.html',`;
+      }
+
+      declareTests({ngUrl, templateDecorator});
+    });
+
+    function declareTests({ngUrl, templateDecorator}:
+                              {ngUrl: string, templateDecorator: (template: string) => string}) {
+      it('should use the right source url in html parse errors', async(() => {
+           appDir['app.component.ts'] =
+               createComponentSource(templateDecorator('<div>\n  </error>'));
+
+           expectPromiseToThrow(
+               compileApp(), new RegExp(`Template parse errors[\\s\\S]*${ngUrl}@1:2`));
+         }));
+
+      it('should use the right source url in template parse errors', async(() => {
+           appDir['app.component.ts'] = createComponentSource(
+               templateDecorator('<div>\n  <div unknown="{{ctxProp}}"></div>'));
+
+           expectPromiseToThrow(
+               compileApp(), new RegExp(`Template parse errors[\\s\\S]*${ngUrl}@1:7`));
+         }));
+
+      it('should create a sourceMap for the template', async(() => {
+           const template = 'Hello World!';
+
+           appDir['app.component.ts'] = createComponentSource(templateDecorator(template));
+
+           compileApp().then((genFile) => {
+             const sourceMap = extractSourceMap(genFile.source);
+             expect(sourceMap.file).toEqual(genFile.genFileUrl);
+
+             // the generated file contains code that is not mapped to
+             // the template but rather to the original source file (e.g. import statements, ...)
+             const templateIndex = sourceMap.sources.indexOf(ngUrl);
+             expect(sourceMap.sourcesContent[templateIndex]).toEqual(template);
+
+             // for the mapping to the original source file we don't store the source code
+             // as we want to keep whatever TypeScript / ... produced for them.
+             const sourceIndex = sourceMap.sources.indexOf(ngComponentPath);
+             expect(sourceMap.sourcesContent[sourceIndex]).toBe(' ');
+           });
+         }));
+
+      it('should map elements correctly to the source', async(() => {
+           const template = '<div>\n   <span></span></div>';
+
+           appDir['app.component.ts'] = createComponentSource(templateDecorator(template));
+
+           compileApp().then((genFile) => {
+             const sourceMap = extractSourceMap(genFile.source);
+             expect(originalPositionFor(sourceMap, findLineAndColumn(genFile.source, `'span'`)))
+                 .toEqual({line: 2, column: 3, source: ngUrl});
+           });
+         }));
+
+      it('should map bindings correctly to the source', async(() => {
+           const template = `<div>\n   <span [title]="someMethod()"></span></div>`;
+
+           appDir['app.component.ts'] = createComponentSource(templateDecorator(template));
+
+           compileApp().then((genFile) => {
+             const sourceMap = extractSourceMap(genFile.source);
+             expect(
+                 originalPositionFor(sourceMap, findLineAndColumn(genFile.source, `someMethod()`)))
+                 .toEqual({line: 2, column: 9, source: ngUrl});
+           });
+         }));
+
+      it('should map events correctly to the source', async(() => {
+           const template = `<div>\n   <span (click)="someMethod()"></span></div>`;
+
+           appDir['app.component.ts'] = createComponentSource(templateDecorator(template));
+
+           compileApp().then((genFile) => {
+             const sourceMap = extractSourceMap(genFile.source);
+             expect(
+                 originalPositionFor(sourceMap, findLineAndColumn(genFile.source, `someMethod()`)))
+                 .toEqual({line: 2, column: 9, source: ngUrl});
+           });
+         }));
+
+      it('should map non template parts to the source file', async(() => {
+           appDir['app.component.ts'] = createComponentSource(templateDecorator('Hello World!'));
+
+           compileApp().then((genFile) => {
+             const sourceMap = extractSourceMap(genFile.source);
+             expect(originalPositionFor(sourceMap, {line: 1, column: 0}))
+                 .toEqual({line: 1, column: 0, source: ngComponentPath});
+           });
+         }));
+    }
+  });
+
+  describe('errors', () => {
+    it('should only warn if not all arguments of an @Injectable class can be resolved',
+       async(() => {
+         const FILES: MockData = {
+           app: {
+             'app.ts': `
+                import {Injectable} from '@angular/core';
+
+                @Injectable()
+                export class MyService {
+                  constructor(a: boolean) {}
+                }
+              `
+           }
+         };
+         const host = new MockCompilerHost(['/app/app.ts'], FILES, angularFiles);
+         const aotHost = new MockAotCompilerHost(host);
+         const warnSpy = spyOn(console, 'warn');
+         compile(host, aotHost, expectNoDiagnostics).then(() => {
+           expect(warnSpy).toHaveBeenCalledWith(
+               `Warning: Can't resolve all parameters for MyService in /app/app.ts: (?). This will become an error in Angular v5.x`);
+         });
+
+       }));
+  });
+
+  it('should add the preamble to generated files', async(() => {
+       const FILES: MockData = {
+         app: {
+           'app.ts': `
+              import { NgModule, Component } from '@angular/core';
+
+              @Component({ template: '' })
+              export class AppComponent {}
+
+              @NgModule({ declarations: [ AppComponent ] })
+              export class AppModule { }
+            `
+         }
+       };
+       const host = new MockCompilerHost(['/app/app.ts'], FILES, angularFiles);
+       const aotHost = new MockAotCompilerHost(host);
+       const genFilePreamble = '/* Hello world! */';
+       compile(host, aotHost, expectNoDiagnostics, expectNoDiagnostics, {genFilePreamble})
+           .then((generatedFiles) => {
+             const genFile = generatedFiles.find(
+                 gf => gf.srcFileUrl === '/app/app.ts' && gf.genFileUrl.endsWith('.ts'));
+             expect(genFile.source.startsWith(genFilePreamble)).toBe(true);
+           });
+
+     }));
+
+  describe('ComponentFactories', () => {
+    it('should include inputs, outputs and ng-content selectors in the component factory',
+       async(() => {
+         const FILES: MockData = {
+           app: {
+             'app.ts': `
+                import {Component, NgModule, Input, Output} from '@angular/core';
+
+                @Component({
+                  selector: 'my-comp',
+                  template: '<ng-content></ng-content><ng-content select="child"></ng-content>'
+                })
+                export class MyComp {
+                  @Input('aInputName')
+                  aInputProp: string;
+
+                  @Output('aOutputName')
+                  aOutputProp: any;
+                }
+
+                @NgModule({
+                  declarations: [MyComp]
+                })
+                export class MyModule {}
+              `
+           }
+         };
+         const host = new MockCompilerHost(['/app/app.ts'], FILES, angularFiles);
+         const aotHost = new MockAotCompilerHost(host);
+         let generatedFiles: GeneratedFile[];
+         compile(host, aotHost, expectNoDiagnostics).then((generatedFiles) => {
+           const genFile = generatedFiles.find(genFile => genFile.srcFileUrl === '/app/app.ts');
+           const createComponentFactoryCall =
+               /ɵccf\([^)]*\)/m.exec(genFile.source)[0].replace(/\s*/g, '');
+           // selector
+           expect(createComponentFactoryCall).toContain('my-comp');
+           // inputs
+           expect(createComponentFactoryCall).toContain(`{aInputProp:'aInputName'}`);
+           // outputs
+           expect(createComponentFactoryCall).toContain(`{aOutputProp:'aOutputName'}`);
+           // ngContentSelectors
+           expect(createComponentFactoryCall).toContain(`['*','child']`);
+         });
+       }));
   });
 });
 
@@ -245,3 +517,8 @@ const FILES: MockData = {
     }
   }
 };
+
+function expectPromiseToThrow(p: Promise<any>, msg: RegExp) {
+  p.then(
+      () => { throw new Error('Expected to throw'); }, (e) => { expect(e.message).toMatch(msg); });
+}

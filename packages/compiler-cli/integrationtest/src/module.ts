@@ -6,10 +6,9 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {ApplicationRef, NgModule, NgZone, Provider, RendererFactory2} from '@angular/core';
+import {ApplicationRef, NgModule} from '@angular/core';
 import {FormsModule} from '@angular/forms';
-import {NoopAnimationsModule, ɵAnimationEngine, ɵAnimationRendererFactory} from '@angular/platform-browser/animations';
-import {ServerModule, ɵServerRendererFactory2} from '@angular/platform-server';
+import {ServerModule} from '@angular/platform-server';
 import {MdButtonModule} from '@angular2-material/button';
 // Note: don't refer to third_party_src as we want to test that
 // we can compile components from node_modules!
@@ -19,24 +18,13 @@ import {MultipleComponentsMyComp, NextComp} from './a/multiple_components';
 import {AnimateCmp} from './animate';
 import {BasicComp} from './basic';
 import {ComponentUsingThirdParty} from './comp_using_3rdp';
+import {CUSTOM} from './custom_token';
 import {CompWithAnalyzeEntryComponentsProvider, CompWithEntryComponents} from './entry_components';
+import {BindingErrorComp} from './errors';
 import {CompConsumingEvents, CompUsingPipes, CompWithProviders, CompWithReferences, DirPublishingEvents, ModuleUsingCustomElements} from './features';
 import {CompUsingRootModuleDirectiveAndPipe, SomeDirectiveInRootModule, SomeLibModule, SomePipeInRootModule, SomeService} from './module_fixtures';
 import {CompWithNgContent, ProjectingComp} from './projection';
 import {CompForChildQuery, CompWithChildQuery, CompWithDirectiveChild, DirectiveForQuery} from './queries';
-
-export function instantiateServerRendererFactory(
-    renderer: RendererFactory2, engine: ɵAnimationEngine, zone: NgZone) {
-  return new ɵAnimationRendererFactory(renderer, engine, zone);
-}
-
-// TODO(matsko): create a server module for animations and use
-// that instead of these manual providers here.
-export const SERVER_ANIMATIONS_PROVIDERS: Provider[] = [{
-  provide: RendererFactory2,
-  useFactory: instantiateServerRendererFactory,
-  deps: [ɵServerRendererFactory2, ɵAnimationEngine, NgZone]
-}];
 
 @NgModule({
   declarations: [
@@ -61,9 +49,9 @@ export const SERVER_ANIMATIONS_PROVIDERS: Provider[] = [{
     SomeDirectiveInRootModule,
     SomePipeInRootModule,
     ComponentUsingThirdParty,
+    BindingErrorComp,
   ],
   imports: [
-    NoopAnimationsModule,
     ServerModule,
     FormsModule,
     MdButtonModule,
@@ -73,7 +61,7 @@ export const SERVER_ANIMATIONS_PROVIDERS: Provider[] = [{
   ],
   providers: [
     SomeService,
-    SERVER_ANIMATIONS_PROVIDERS,
+    {provide: CUSTOM, useValue: {name: 'some name'}},
   ],
   entryComponents: [
     AnimateCmp,
@@ -85,6 +73,7 @@ export const SERVER_ANIMATIONS_PROVIDERS: Provider[] = [{
     CompWithReferences,
     ProjectingComp,
     ComponentUsingThirdParty,
+    BindingErrorComp,
   ]
 })
 export class MainModule {

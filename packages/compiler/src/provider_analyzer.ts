@@ -32,7 +32,7 @@ export class ProviderViewContext {
   viewProviders: Map<any, boolean>;
   errors: ProviderError[] = [];
 
-  constructor(public component: CompileDirectiveMetadata, public sourceSpan: ParseSourceSpan) {
+  constructor(public component: CompileDirectiveMetadata) {
     this.viewQueries = _getViewQueries(component);
     this.viewProviders = new Map<any, boolean>();
     component.viewProviders.forEach((provider) => {
@@ -462,9 +462,10 @@ function _resolveProviders(
               (<CompileTypeMetadata>provider.token.identifier).lifecycleHooks ?
           (<CompileTypeMetadata>provider.token.identifier).lifecycleHooks :
           [];
+      const isUseValue = !(provider.useClass || provider.useExisting || provider.useFactory);
       resolvedProvider = new ProviderAst(
-          provider.token, provider.multi, eager || lifecycleHooks.length > 0, [provider],
-          providerType, lifecycleHooks, sourceSpan);
+          provider.token, provider.multi, eager || isUseValue, [provider], providerType,
+          lifecycleHooks, sourceSpan);
       targetProvidersByToken.set(tokenReference(provider.token), resolvedProvider);
     } else {
       if (!provider.multi) {

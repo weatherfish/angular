@@ -11,6 +11,7 @@ import {Injector} from '../di/injector';
 import {Type} from '../type';
 
 import {ElementRef} from './element_ref';
+import {NgModuleRef} from './ng_module_factory';
 import {ViewRef} from './view_ref';
 
 /**
@@ -70,8 +71,21 @@ export abstract class ComponentFactory<C> {
   abstract get selector(): string;
   abstract get componentType(): Type<any>;
   /**
+   * selector for all <ng-content> elements in the component.
+   */
+  abstract get ngContentSelectors(): string[];
+  /**
+   * the inputs of the component.
+   */
+  abstract get inputs(): {propName: string, templateName: string}[];
+  /**
+   * the outputs of the component.
+   */
+  abstract get outputs(): {propName: string, templateName: string}[];
+  /**
    * Creates a new component.
    */
-  abstract create(injector: Injector, projectableNodes?: any[][], rootSelectorOrNode?: string|any):
-      ComponentRef<C>;
+  abstract create(
+      injector: Injector, projectableNodes?: any[][], rootSelectorOrNode?: string|any,
+      ngModule?: NgModuleRef<any>): ComponentRef<C>;
 }

@@ -6,7 +6,7 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {CompileDirectiveMetadata, CompileIdentifierMetadata, CompileNgModuleMetadata, CompileProviderMetadata, componentFactoryName, createHostComponentMeta, flatten, identifierName} from '../compile_metadata';
+import {CompileDirectiveMetadata, CompileIdentifierMetadata, CompileNgModuleMetadata, CompileProviderMetadata, componentFactoryName, createHostComponentMeta, flatten, identifierName, sourceUrl, templateSourceUrl} from '../compile_metadata';
 import {CompilerConfig} from '../config';
 import {Identifiers, createIdentifier, createIdentifierToken} from '../identifiers';
 import {CompileMetadataResolver} from '../metadata_resolver';
@@ -33,7 +33,8 @@ export class AotCompiler {
       private _styleCompiler: StyleCompiler, private _viewCompiler: ViewCompiler,
       private _ngModuleCompiler: NgModuleCompiler, private _outputEmitter: OutputEmitter,
       private _summaryResolver: SummaryResolver<StaticSymbol>, private _localeId: string,
-      private _translationFormat: string, private _symbolResolver: StaticSymbolResolver) {}
+      private _translationFormat: string, private _genFilePreamble: string,
+      private _symbolResolver: StaticSymbolResolver) {}
 
   clearCache() { this._metadataResolver.clearCache(); }
 
@@ -162,12 +163,27 @@ export class AotCompiler {
                 hostMeta, ngModule, [compMeta.type], null, fileSuffix, targetStatements)
             .viewClassVar;
     const compFactoryVar = componentFactoryName(compMeta.type.reference);
+    const inputsExprs: o.LiteralMapEntry[] = [];
+    for (let propName in compMeta.inputs) {
+      const templateName = compMeta.inputs[propName];
+      // Don't quote so that the key gets minified...
+      inputsExprs.push(new o.LiteralMapEntry(propName, o.literal(templateName), false));
+    }
+    const outputsExprs: o.LiteralMapEntry[] = [];
+    for (let propName in compMeta.outputs) {
+      const templateName = compMeta.outputs[propName];
+      // Don't quote so that the key gets minified...
+      outputsExprs.push(new o.LiteralMapEntry(propName, o.literal(templateName), false));
+    }
+
     targetStatements.push(
         o.variable(compFactoryVar)
             .set(o.importExpr(createIdentifier(Identifiers.createComponentFactory)).callFn([
-              o.literal(compMeta.selector),
-              o.importExpr(compMeta.type),
-              o.variable(hostViewFactoryVar),
+              o.literal(compMeta.selector), o.importExpr(compMeta.type),
+              o.variable(hostViewFactoryVar), new o.LiteralMapExpr(inputsExprs),
+              new o.LiteralMapExpr(outputsExprs),
+              o.literalArr(
+                  compMeta.template.ngContentSelectors.map(selector => o.literal(selector)))
             ]))
             .toDeclStmt(
                 o.importType(
@@ -189,7 +205,7 @@ export class AotCompiler {
 
     const {template: parsedTemplate, pipes: usedPipes} = this._templateParser.parse(
         compMeta, compMeta.template.template, directives, pipes, ngModule.schemas,
-        identifierName(compMeta.type));
+        templateSourceUrl(ngModule.type, compMeta, compMeta.template));
     const stylesExpr = componentStyles ? o.variable(componentStyles.stylesVar) : o.literalArr([]);
     const viewResult =
         this._viewCompiler.compileComponent(compMeta, parsedTemplate, stylesExpr, usedPipes);
@@ -215,7 +231,8 @@ export class AotCompiler {
       exportedVars: string[]): GeneratedFile {
     return new GeneratedFile(
         srcFileUrl, genFileUrl,
-        this._outputEmitter.emitStatements(genFileUrl, statements, exportedVars));
+        this._outputEmitter.emitStatements(
+            sourceUrl(srcFileUrl), genFileUrl, statements, exportedVars, this._genFilePreamble));
   }
 }
 

@@ -14,7 +14,7 @@ import {CompilerInjectable} from './injectable';
 import {ClassBuilder, createClassStmt} from './output/class_builder';
 import * as o from './output/output_ast';
 import {convertValueToOutputAst} from './output/value_util';
-import {ParseLocation, ParseSourceFile, ParseSourceSpan} from './parse_util';
+import {ParseLocation, ParseSourceFile, ParseSourceSpan, typeSourceSpan} from './parse_util';
 import {NgModuleProviderAnalyzer} from './provider_analyzer';
 import {ProviderAst} from './template_parser/template_ast';
 
@@ -37,14 +37,7 @@ export class NgModuleCompileResult {
 export class NgModuleCompiler {
   compile(ngModuleMeta: CompileNgModuleMetadata, extraProviders: CompileProviderMetadata[]):
       NgModuleCompileResult {
-    const moduleUrl = identifierModuleUrl(ngModuleMeta.type);
-    const sourceFileName = moduleUrl != null ?
-        `in NgModule ${identifierName(ngModuleMeta.type)} in ${moduleUrl}` :
-        `in NgModule ${identifierName(ngModuleMeta.type)}`;
-    const sourceFile = new ParseSourceFile('', sourceFileName);
-    const sourceSpan = new ParseSourceSpan(
-        new ParseLocation(sourceFile, null, null, null),
-        new ParseLocation(sourceFile, null, null, null));
+    const sourceSpan = typeSourceSpan('NgModule', ngModuleMeta.type);
     const deps: ComponentFactoryDependency[] = [];
     const bootstrapComponentFactories: CompileIdentifierMetadata[] = [];
     const entryComponentFactories =
@@ -91,6 +84,7 @@ class _InjectorBuilder implements ClassBuilder {
   getters: o.ClassGetter[] = [];
   methods: o.ClassMethod[] = [];
   ctorStmts: o.Statement[] = [];
+  private _lazyProps = new Map<string, o.Expression>();
   private _tokens: CompileTokenMetadata[] = [];
   private _instances = new Map<any, o.Expression>();
   private _createStmts: o.Statement[] = [];
@@ -110,7 +104,11 @@ class _InjectorBuilder implements ClassBuilder {
         propName, resolvedProvider, providerValueExpressions, resolvedProvider.multiProvider,
         resolvedProvider.eager);
     if (resolvedProvider.lifecycleHooks.indexOf(ɵLifecycleHooks.OnDestroy) !== -1) {
-      this._destroyStmts.push(instance.callMethod('ngOnDestroy', []).toStmt());
+      let callNgOnDestroy: o.Expression = instance.callMethod('ngOnDestroy', []);
+      if (!resolvedProvider.eager) {
+        callNgOnDestroy = this._lazyProps.get(instance.name).and(callNgOnDestroy);
+      }
+      this._destroyStmts.push(callNgOnDestroy.toStmt());
     }
     this._tokens.push(resolvedProvider.token);
     this._instances.set(tokenReference(resolvedProvider.token), instance);
@@ -180,7 +178,7 @@ class _InjectorBuilder implements ClassBuilder {
 
   private _createProviderProperty(
       propName: string, provider: ProviderAst, providerValueExpressions: o.Expression[],
-      isMulti: boolean, isEager: boolean): o.Expression {
+      isMulti: boolean, isEager: boolean): o.ReadPropExpr {
     let resolvedProviderValueExpr: o.Expression;
     let type: o.Type;
     if (isMulti) {
@@ -197,16 +195,17 @@ class _InjectorBuilder implements ClassBuilder {
       this.fields.push(new o.ClassField(propName, type));
       this._createStmts.push(o.THIS_EXPR.prop(propName).set(resolvedProviderValueExpr).toStmt());
     } else {
-      const internalField = `_${propName}`;
-      this.fields.push(new o.ClassField(internalField, type));
+      const internalFieldProp = o.THIS_EXPR.prop(`_${propName}`);
+      this.fields.push(new o.ClassField(internalFieldProp.name, type));
       // Note: Equals is important for JS so that it also checks the undefined case!
       const getterStmts = [
         new o.IfStmt(
-            o.THIS_EXPR.prop(internalField).isBlank(),
-            [o.THIS_EXPR.prop(internalField).set(resolvedProviderValueExpr).toStmt()]),
-        new o.ReturnStatement(o.THIS_EXPR.prop(internalField))
+            internalFieldProp.isBlank(),
+            [internalFieldProp.set(resolvedProviderValueExpr).toStmt()]),
+        new o.ReturnStatement(internalFieldProp)
       ];
       this.getters.push(new o.ClassGetter(propName, getterStmts, type));
+      this._lazyProps.set(propName, internalFieldProp);
     }
     return o.THIS_EXPR.prop(propName);
   }
@@ -217,11 +216,15 @@ class _InjectorBuilder implements ClassBuilder {
       result = o.literal(dep.value);
     }
     if (!dep.isSkipSelf) {
-      if (dep.token &&
-          (tokenReference(dep.token) === resolveIdentifier(Identifiers.Injector) ||
-           tokenReference(dep.token) === resolveIdentifier(Identifiers.ComponentFactoryResolver))) {
-        result = o.THIS_EXPR;
+      if (dep.token) {
+        if (tokenReference(dep.token) === resolveIdentifier(Identifiers.Injector)) {
+          result = o.THIS_EXPR;
+        } else if (
+            tokenReference(dep.token) === resolveIdentifier(Identifiers.ComponentFactoryResolver)) {
+          result = o.THIS_EXPR.prop('componentFactoryResolver');
+        }
       }
+
       if (!result) {
         result = this._instances.get(tokenReference(dep.token));
       }

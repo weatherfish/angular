@@ -6,7 +6,7 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {APP_BOOTSTRAP_LISTENER, APP_INITIALIZER, CompilerFactory, Component, NgModule, NgZone, PlatformRef, TemplateRef, Type, ViewChild, ViewContainerRef} from '@angular/core';
+import {APP_BOOTSTRAP_LISTENER, APP_INITIALIZER, Compiler, CompilerFactory, Component, NgModule, NgZone, PlatformRef, TemplateRef, Type, ViewChild, ViewContainerRef} from '@angular/core';
 import {ApplicationRef, ApplicationRef_} from '@angular/core/src/application_ref';
 import {ErrorHandler} from '@angular/core/src/error_handler';
 import {ComponentRef} from '@angular/core/src/linker/component_factory';
@@ -52,7 +52,7 @@ export function main() {
       } else {
         options = providersOrOptions || {};
       }
-      const errorHandler = new ErrorHandler(false);
+      const errorHandler = new ErrorHandler();
       errorHandler._console = mockConsole as any;
 
       const platformModule = getDOM().supportsDOMEvents() ? BrowserModule : ServerModule;
@@ -71,6 +71,33 @@ export function main() {
       }
       return MyModule;
     }
+
+    it('should bootstrap a component from a child module',
+       async(inject([ApplicationRef, Compiler], (app: ApplicationRef, compiler: Compiler) => {
+         @Component({
+           selector: 'bootstrap-app',
+           template: '',
+         })
+         class SomeComponent {
+         }
+
+         @NgModule({
+           providers: [{provide: 'hello', useValue: 'component'}],
+           declarations: [SomeComponent],
+           entryComponents: [SomeComponent],
+         })
+         class SomeModule {
+         }
+
+         createRootEl();
+         const modFactory = compiler.compileModuleSync(SomeModule);
+         const module = modFactory.create(TestBed);
+         const cmpFactory = module.componentFactoryResolver.resolveComponentFactory(SomeComponent);
+         const component = app.bootstrap(cmpFactory);
+
+         // The component should see the child module providers
+         expect(component.injector.get('hello')).toEqual('component');
+       })));
 
     describe('ApplicationRef', () => {
       beforeEach(() => { TestBed.configureTestingModule({imports: [createModule()]}); });
@@ -172,7 +199,7 @@ export function main() {
                ]))
                .then(() => expect(false).toBe(true), (e) => {
                  expect(e).toBe('Test');
-                 expect(mockConsole.res).toEqual(['EXCEPTION: Test']);
+                 expect(mockConsole.res[0].join('#')).toEqual('ERROR#Test');
                });
          }));
 
@@ -213,7 +240,7 @@ export function main() {
                  const expectedErrMsg =
                      `The module MyModule was bootstrapped, but it does not declare "@NgModule.bootstrap" components nor a "ngDoBootstrap" method. Please define one of these.`;
                  expect(e.message).toEqual(expectedErrMsg);
-                 expect(mockConsole.res[0]).toEqual('EXCEPTION: ' + expectedErrMsg);
+                 expect(mockConsole.res[0].join('#')).toEqual('ERROR#Error: ' + expectedErrMsg);
                });
          }));
 
@@ -269,7 +296,7 @@ export function main() {
            defaultPlatform.bootstrapModuleFactory(moduleFactory)
                .then(() => expect(false).toBe(true), (e) => {
                  expect(e).toBe('Test');
-                 expect(mockConsole.res).toEqual(['EXCEPTION: Test']);
+                 expect(mockConsole.res[0].join('#')).toEqual('ERROR#Test');
                });
          }));
     });
@@ -509,7 +536,7 @@ export function main() {
 }
 
 class MockConsole {
-  res: any[] = [];
-  log(s: any): void { this.res.push(s); }
-  error(s: any): void { this.res.push(s); }
+  res: any[][] = [];
+  log(...args: any[]): void { this.res.push(args); }
+  error(...args: any[]): void { this.res.push(args); }
 }

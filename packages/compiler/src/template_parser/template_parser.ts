@@ -98,7 +98,7 @@ export class TemplateParser {
       templateUrl: string): {template: TemplateAst[], pipes: CompilePipeSummary[]} {
     const result = this.tryParse(component, template, directives, pipes, schemas, templateUrl);
     const warnings = result.errors.filter(error => error.level === ParseErrorLevel.WARNING);
-    const errors = result.errors.filter(error => error.level === ParseErrorLevel.FATAL);
+    const errors = result.errors.filter(error => error.level === ParseErrorLevel.ERROR);
 
     if (warnings.length > 0) {
       this._console.warn(`Template parse warnings:\n${warnings.join('\n')}`);
@@ -132,8 +132,7 @@ export class TemplateParser {
     if (htmlAstWithErrors.rootNodes.length > 0) {
       const uniqDirectives = removeSummaryDuplicates(directives);
       const uniqPipes = removeSummaryDuplicates(pipes);
-      const providerViewContext =
-          new ProviderViewContext(component, htmlAstWithErrors.rootNodes[0].sourceSpan);
+      const providerViewContext = new ProviderViewContext(component);
       let interpolationConfig: InterpolationConfig;
       if (component.template && component.template.interpolation) {
         interpolationConfig = {
@@ -197,7 +196,7 @@ export class TemplateParser {
           } else {
             const error = new TemplateParseError(
                 `Reference "#${name}" is defined several times`, reference.sourceSpan,
-                ParseErrorLevel.FATAL);
+                ParseErrorLevel.ERROR);
             errors.push(error);
           }
         }));
@@ -732,7 +731,7 @@ class TemplateParseVisitor implements html.Visitor {
 
   private _reportError(
       message: string, sourceSpan: ParseSourceSpan,
-      level: ParseErrorLevel = ParseErrorLevel.FATAL) {
+      level: ParseErrorLevel = ParseErrorLevel.ERROR) {
     this._targetErrors.push(new ParseError(sourceSpan, message, level));
   }
 }

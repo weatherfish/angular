@@ -67,7 +67,7 @@ export function createAotCompiler(compilerHost: AotCompilerHost, options: AotCom
   const resolver = new CompileMetadataResolver(
       config, new NgModuleResolver(staticReflector), new DirectiveResolver(staticReflector),
       new PipeResolver(staticReflector), summaryResolver, elementSchemaRegistry, normalizer,
-      symbolCache, staticReflector);
+      console, symbolCache, staticReflector);
   // TODO(vicb): do not pass options.i18nFormat here
   const importResolver = {
     getImportAs: (symbol: StaticSymbol) => symbolResolver.getImportAs(symbol),
@@ -79,6 +79,6 @@ export function createAotCompiler(compilerHost: AotCompilerHost, options: AotCom
   const compiler = new AotCompiler(
       config, compilerHost, resolver, tmplParser, new StyleCompiler(urlResolver), viewCompiler,
       new NgModuleCompiler(), new TypeScriptEmitter(importResolver), summaryResolver,
-      options.locale, options.i18nFormat, symbolResolver);
+      options.locale, options.i18nFormat, options.genFilePreamble, symbolResolver);
   return {compiler, reflector: staticReflector};
 }

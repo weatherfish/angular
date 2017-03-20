@@ -14,11 +14,10 @@ import {SourceMap} from '@angular/compiler/src/output/source_map';
 import {TypeScriptEmitter} from '@angular/compiler/src/output/ts_emitter';
 import {ParseSourceSpan} from '@angular/compiler/src/parse_util';
 
-import {extractSourceMap} from './abstract_emitter_node_only_spec';
+import {extractSourceMap, originalPositionFor} from './source_map_util';
 
-const SourceMapConsumer = require('source-map').SourceMapConsumer;
-
-const someModuleUrl = 'somePackage/somePath';
+const someGenFilePath = 'somePackage/someGenFile';
+const someSourceFilePath = 'somePackage/someSourceFile';
 
 class SimpleJsImportGenerator implements ImportResolver {
   fileNameToModuleName(importedUrlStr: string, moduleUrlStr: string): string {
@@ -45,9 +44,11 @@ export function main() {
     });
 
     function emitSourceMap(
-        stmt: o.Statement | o.Statement[], exportedVars: string[] = null): SourceMap {
+        stmt: o.Statement | o.Statement[], exportedVars: string[] = null,
+        preamble?: string): SourceMap {
       const stmts = Array.isArray(stmt) ? stmt : [stmt];
-      const source = emitter.emitStatements(someModuleUrl, stmts, exportedVars || []);
+      const source = emitter.emitStatements(
+          someSourceFilePath, someGenFilePath, stmts, exportedVars || [], preamble);
       return extractSourceMap(source);
     }
 
@@ -58,13 +59,12 @@ export function main() {
         const endLocation = new ParseLocation(source, 7, 0, 6);
         const sourceSpan = new ParseSourceSpan(startLocation, endLocation);
         const someVar = o.variable('someVar', null, sourceSpan);
-        const sm = emitSourceMap(someVar.toStmt());
-        const smc = new SourceMapConsumer(sm);
+        const sm = emitSourceMap(someVar.toStmt(), [], '/* MyPreamble \n */');
 
-        expect(sm.sources).toEqual(['in.js']);
-        expect(sm.sourcesContent).toEqual([';;;var']);
-        expect(smc.originalPositionFor({line: 1, column: 0}))
-            .toEqual({line: 1, column: 3, source: 'in.js', name: null});
+        expect(sm.sources).toEqual([someSourceFilePath, 'in.js']);
+        expect(sm.sourcesContent).toEqual([' ', ';;;var']);
+        expect(originalPositionFor(sm, {line: 3, column: 0}))
+            .toEqual({line: 1, column: 3, source: 'in.js'});
       });
     });
   });

@@ -7,8 +7,8 @@
  */
 
 import {NgIf} from '@angular/common';
-import {ComponentFactory, ComponentRef, Injector, RendererFactory2, RootRenderer, Sanitizer, TemplateRef, ViewContainerRef} from '@angular/core';
-import {ArgumentType, BindingType, NodeFlags, ViewDefinition, ViewFlags, anchorDef, createComponentFactory, directiveDef, elementDef, initServicesIfNeeded, textDef, viewDef} from '@angular/core/src/view/index';
+import {ComponentFactory, ComponentFactoryResolver, ComponentRef, Injector, NgModuleRef, RendererFactory2, RootRenderer, Sanitizer, TemplateRef, ViewContainerRef} from '@angular/core';
+import {ArgumentType, BindingFlags, NodeFlags, ViewDefinition, ViewFlags, anchorDef, createComponentFactory, directiveDef, elementDef, initServicesIfNeeded, textDef, viewDef} from '@angular/core/src/view/index';
 import {DomRendererFactory2} from '@angular/platform-browser/src/dom/dom_renderer';
 import {DomSanitizerImpl, SafeStyle} from '@angular/platform-browser/src/security/dom_sanitization_service';
 
@@ -63,7 +63,7 @@ function TreeComponent_0(): ViewDefinition {
       [
         elementDef(
             NodeFlags.None, null, null, 1, 'span', null,
-            [[BindingType.ElementStyle, 'backgroundColor', null]]),
+            [[BindingFlags.TypeElementStyle, 'backgroundColor', null]]),
         textDef(null, [' ', ' ']),
         anchorDef(NodeFlags.EmbeddedViews, null, null, 1, null, TreeComponent_1),
         directiveDef(
@@ -84,7 +84,7 @@ function TreeComponent_0(): ViewDefinition {
       });
 }
 
-export class AppModule implements Injector {
+export class AppModule implements Injector, NgModuleRef<any> {
   private sanitizer: DomSanitizerImpl;
   private componentFactory: ComponentFactory<TreeComponent>;
   private renderer2: RendererFactory2;
@@ -97,7 +97,8 @@ export class AppModule implements Injector {
     this.renderer2 = new DomRendererFactory2(null, null);
     trustedEmptyColor = this.sanitizer.bypassSecurityTrustStyle('');
     trustedGreyColor = this.sanitizer.bypassSecurityTrustStyle('grey');
-    this.componentFactory = createComponentFactory('#root', TreeComponent, TreeComponent_Host);
+    this.componentFactory =
+        createComponentFactory('#root', TreeComponent, TreeComponent_Host, {}, {}, []);
   }
 
   get(token: any, notFoundValue: any = Injector.THROW_IF_NOT_FOUND): any {
@@ -108,12 +109,22 @@ export class AppModule implements Injector {
         return this.sanitizer;
       case RootRenderer:
         return null;
+      case NgModuleRef:
+        return this;
     }
     return Injector.NULL.get(token, notFoundValue);
   }
 
   bootstrap() {
-    this.componentRef = this.componentFactory.create(this, [], this.componentFactory.selector);
+    this.componentRef =
+        this.componentFactory.create(Injector.NULL, [], this.componentFactory.selector, this);
   }
+
   tick() { this.componentRef.changeDetectorRef.detectChanges(); }
+
+  get injector() { return this; }
+  get componentFactoryResolver(): ComponentFactoryResolver { return null; }
+  get instance() { return this; }
+  destroy() {}
+  onDestroy(callback: () => void) {}
 }

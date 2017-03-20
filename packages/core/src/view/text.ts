@@ -6,19 +6,16 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {isDevMode} from '../application_ref';
 import {looseIdentical} from '../util';
 
-import {BindingDef, BindingType, DebugContext, NodeData, NodeDef, NodeFlags, RootData, Services, TextData, ViewData, ViewFlags, asElementData, asTextData} from './types';
-import {checkAndUpdateBinding, getParentRenderElement, sliceErrorStack} from './util';
+import {BindingDef, BindingFlags, DebugContext, NodeData, NodeDef, NodeFlags, RootData, Services, TextData, ViewData, ViewFlags, asElementData, asTextData} from './types';
+import {calcBindingFlags, checkAndUpdateBinding, getParentRenderElement} from './util';
 
 export function textDef(ngContentIndex: number, constants: string[]): NodeDef {
-  // skip the call to sliceErrorStack itself + the call to this function.
-  const source = isDevMode() ? sliceErrorStack(2, 3) : '';
   const bindings: BindingDef[] = new Array(constants.length - 1);
   for (let i = 1; i < constants.length; i++) {
     bindings[i - 1] = {
-      type: BindingType.TextInterpolation,
+      flags: BindingFlags.TypeProperty,
       name: undefined,
       ns: undefined,
       nonMinifiedName: undefined,
@@ -43,10 +40,11 @@ export function textDef(ngContentIndex: number, constants: string[]): NodeDef {
     matchedQueryIds: 0,
     references: {}, ngContentIndex,
     childCount: 0, bindings,
+    bindingFlags: calcBindingFlags(bindings),
     outputs: [],
     element: undefined,
     provider: undefined,
-    text: {prefix: constants[0], source},
+    text: {prefix: constants[0]},
     query: undefined,
     ngContent: undefined
   };

@@ -9,6 +9,7 @@
 import {isDevMode} from '../application_ref';
 import {DebugElement, DebugNode, EventListener, getDebugNode, indexDebugNode, removeDebugNodeFromIndex} from '../debug/debug_node';
 import {Injector} from '../di';
+import {NgModuleRef} from '../linker/ng_module_factory';
 import {Renderer2, RendererFactory2, RendererStyleFlags2, RendererType2} from '../render/api';
 import {Sanitizer, SecurityContext} from '../security';
 
@@ -16,9 +17,10 @@ import {isViewDebugError, viewDestroyedError, viewWrappedDebugError} from './err
 import {resolveDep} from './provider';
 import {dirtyParentQueries, getQueryValue} from './query';
 import {createInjector} from './refs';
-import {ArgumentType, BindingType, CheckType, DebugContext, DepFlags, ElementData, NodeCheckFn, NodeData, NodeDef, NodeFlags, RootData, Services, ViewData, ViewDefinition, ViewDefinitionFactory, ViewState, asElementData, asProviderData, asPureExpressionData} from './types';
-import {checkBinding, isComponentView, renderNode, viewParentEl} from './util';
+import {ArgumentType, BindingFlags, CheckType, DebugContext, DepFlags, ElementData, NodeCheckFn, NodeData, NodeDef, NodeFlags, NodeLogger, RootData, Services, ViewData, ViewDefinition, ViewDefinitionFactory, ViewState, asElementData, asProviderData, asPureExpressionData} from './types';
+import {NOOP, checkBinding, isComponentView, renderNode, viewParentEl} from './util';
 import {checkAndUpdateNode, checkAndUpdateView, checkNoChangesNode, checkNoChangesView, createEmbeddedView, createRootView, destroyView} from './view';
+
 
 let initialized = false;
 
@@ -80,31 +82,32 @@ function createDebugServices() {
 }
 
 function createProdRootView(
-    injector: Injector, projectableNodes: any[][], rootSelectorOrNode: string | any,
-    def: ViewDefinition, context?: any): ViewData {
-  const rendererFactory: RendererFactory2 = injector.get(RendererFactory2);
+    elInjector: Injector, projectableNodes: any[][], rootSelectorOrNode: string | any,
+    def: ViewDefinition, ngModule: NgModuleRef<any>, context?: any): ViewData {
+  const rendererFactory: RendererFactory2 = ngModule.injector.get(RendererFactory2);
   return createRootView(
-      createRootData(injector, rendererFactory, projectableNodes, rootSelectorOrNode), def,
-      context);
+      createRootData(elInjector, ngModule, rendererFactory, projectableNodes, rootSelectorOrNode),
+      def, context);
 }
 
 function debugCreateRootView(
-    injector: Injector, projectableNodes: any[][], rootSelectorOrNode: string | any,
-    def: ViewDefinition, context?: any): ViewData {
-  const rendererFactory: RendererFactory2 = injector.get(RendererFactory2);
+    elInjector: Injector, projectableNodes: any[][], rootSelectorOrNode: string | any,
+    def: ViewDefinition, ngModule: NgModuleRef<any>, context?: any): ViewData {
+  const rendererFactory: RendererFactory2 = ngModule.injector.get(RendererFactory2);
   const root = createRootData(
-      injector, new DebugRendererFactory2(rendererFactory), projectableNodes, rootSelectorOrNode);
+      elInjector, ngModule, new DebugRendererFactory2(rendererFactory), projectableNodes,
+      rootSelectorOrNode);
   return callWithDebugContext(DebugAction.create, createRootView, null, [root, def, context]);
 }
 
 function createRootData(
-    injector: Injector, rendererFactory: RendererFactory2, projectableNodes: any[][],
-    rootSelectorOrNode: any): RootData {
-  const sanitizer = injector.get(Sanitizer);
+    elInjector: Injector, ngModule: NgModuleRef<any>, rendererFactory: RendererFactory2,
+    projectableNodes: any[][], rootSelectorOrNode: any): RootData {
+  const sanitizer = ngModule.injector.get(Sanitizer);
   const renderer = rendererFactory.createRenderer(null, null);
   return {
-    injector,
-    projectableNodes,
+    ngModule,
+    injector: elInjector, projectableNodes,
     selectorOrNode: rootSelectorOrNode, sanitizer, rendererFactory, renderer
   };
 }
@@ -222,18 +225,17 @@ function debugCheckAndUpdateNode(
   const changed = (<any>checkAndUpdateNode)(view, nodeDef, argStyle, ...givenValues);
   if (changed) {
     const values = argStyle === ArgumentType.Dynamic ? givenValues[0] : givenValues;
-    if (nodeDef.flags & (NodeFlags.TypeDirective | NodeFlags.TypeElement)) {
+    if (nodeDef.flags & NodeFlags.TypeDirective) {
       const bindingValues: {[key: string]: string} = {};
       for (let i = 0; i < nodeDef.bindings.length; i++) {
         const binding = nodeDef.bindings[i];
         const value = values[i];
-        if ((binding.type === BindingType.ComponentHostProperty ||
-             binding.type === BindingType.DirectiveProperty)) {
+        if (binding.flags & BindingFlags.TypeProperty) {
           bindingValues[normalizeDebugBindingName(binding.nonMinifiedName)] =
               normalizeDebugBindingValue(value);
         }
       }
-      const elDef = nodeDef.flags & NodeFlags.TypeDirective ? nodeDef.parent : nodeDef;
+      const elDef = nodeDef.parent;
       const el = asElementData(view, elDef.index).renderElement;
       if (!elDef.element.name) {
         // a comment.
@@ -357,13 +359,6 @@ class DebugContext_ implements DebugContext {
     }
     return references;
   }
-  get source(): string {
-    if (this.nodeDef.flags & NodeFlags.TypeText) {
-      return this.nodeDef.text.source;
-    } else {
-      return this.elDef.element.source;
-    }
-  }
   get componentRenderElement() {
     const elData = findHostElement(this.elOrCompView);
     return elData ? elData.renderElement : undefined;
@@ -371,6 +366,31 @@ class DebugContext_ implements DebugContext {
   get renderNode(): any {
     return this.nodeDef.flags & NodeFlags.TypeText ? renderNode(this.view, this.nodeDef) :
                                                      renderNode(this.elView, this.elDef);
+  }
+  logError(console: Console, ...values: any[]) {
+    let logViewFactory: ViewDefinitionFactory;
+    let logNodeIndex: number;
+    if (this.nodeDef.flags & NodeFlags.TypeText) {
+      logViewFactory = this.view.def.factory;
+      logNodeIndex = this.nodeDef.index;
+    } else {
+      logViewFactory = this.elView.def.factory;
+      logNodeIndex = this.elDef.index;
+    }
+    let currNodeIndex = -1;
+    let nodeLogger: NodeLogger = () => {
+      currNodeIndex++;
+      if (currNodeIndex === logNodeIndex) {
+        return console.error.bind(console, ...values);
+      } else {
+        return NOOP;
+      }
+    };
+    logViewFactory(nodeLogger);
+    if (currNodeIndex < logNodeIndex) {
+      console.error('Illegal state: the ViewDefinitionFactory did not call the logger!');
+      (<any>console.error)(...values);
+    }
   }
 }
 

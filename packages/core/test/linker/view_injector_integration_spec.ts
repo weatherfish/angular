@@ -6,7 +6,7 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {Attribute, ChangeDetectionStrategy, ChangeDetectorRef, Component, DebugElement, Directive, ElementRef, Host, Inject, InjectionToken, Input, Optional, Pipe, PipeTransform, Provider, Self, SkipSelf, TemplateRef, Type, ViewContainerRef} from '@angular/core';
+import {Attribute, ChangeDetectionStrategy, ChangeDetectorRef, Component, ComponentFactoryResolver, DebugElement, Directive, ElementRef, Host, Inject, InjectionToken, Injector, Input, NgModule, Optional, Pipe, PipeTransform, Provider, Self, SkipSelf, TemplateRef, Type, ViewContainerRef} from '@angular/core';
 import {ComponentFixture, TestBed, fakeAsync} from '@angular/core/testing';
 import {getDOM} from '@angular/platform-browser/src/dom/dom_adapter';
 import {expect} from '@angular/platform-browser/testing/src/matchers';
@@ -342,34 +342,36 @@ export function main() {
         expect(created).toBe(true);
       });
 
-      it('should instantiate providers lazily', () => {
-        TestBed.configureTestingModule({declarations: [SimpleDirective]});
+      it('should support ngOnDestroy for lazy providers', () => {
         let created = false;
-        TestBed.overrideDirective(
-            SimpleDirective,
-            {set: {providers: [{provide: 'service', useFactory: () => created = true}]}});
+        let destroyed = false;
 
-        const el = createComponent('<div simpleDirective></div>');
-
-        expect(created).toBe(false);
-
-        el.children[0].injector.get('service');
-
-        expect(created).toBe(true);
-      });
-
-      it('should instantiate providers with a lifecycle hook eagerly', () => {
-        let created = false;
         class SomeInjectable {
           constructor() { created = true; }
-          ngOnDestroy() {}
+          ngOnDestroy() { destroyed = true; }
         }
-        TestBed.configureTestingModule({declarations: [SimpleDirective]});
-        TestBed.overrideDirective(SimpleDirective, {set: {providers: [SomeInjectable]}});
 
-        const el = createComponent('<div simpleDirective></div>');
+        @Component({providers: [SomeInjectable], template: ''})
+        class SomeComp {
+        }
 
+        TestBed.configureTestingModule({declarations: [SomeComp]});
+
+
+        let compRef = TestBed.createComponent(SomeComp).componentRef;
+        expect(created).toBe(false);
+        expect(destroyed).toBe(false);
+
+        // no error if the provider was not yet created
+        compRef.destroy();
+        expect(created).toBe(false);
+        expect(destroyed).toBe(false);
+
+        compRef = TestBed.createComponent(SomeComp).componentRef;
+        compRef.injector.get(SomeInjectable);
         expect(created).toBe(true);
+        compRef.destroy();
+        expect(destroyed).toBe(true);
       });
 
       it('should instantiate view providers lazily', () => {
@@ -470,7 +472,7 @@ export function main() {
         TestBed.configureTestingModule({declarations: [CycleDirective]});
         expect(() => createComponent('<div cycleDirective></div>'))
             .toThrowError(
-                'Template parse errors:\nCannot instantiate cyclic dependency! CycleDirective ("[ERROR ->]<div cycleDirective></div>"): TestComp@0:0');
+                /Template parse errors:\nCannot instantiate cyclic dependency! CycleDirective \("\[ERROR ->\]<div cycleDirective><\/div>"\): .*TestComp.html@0:0/);
       });
 
       it('should not instantiate a directive in a view that has a host dependency on providers' +
@@ -485,7 +487,7 @@ export function main() {
 
            expect(() => createComponent('<div simpleComponent></div>'))
                .toThrowError(
-                   `Template parse errors:\nNo provider for service ("[ERROR ->]<div needsServiceFromHost><div>"): SimpleComponent@0:0`);
+                   /Template parse errors:\nNo provider for service \("\[ERROR ->\]<div needsServiceFromHost><div>"\): .*SimpleComponent.html@0:0/);
          });
 
       it('should not instantiate a directive in a view that has a host dependency on providers' +
@@ -501,7 +503,7 @@ export function main() {
 
            expect(() => createComponent('<div simpleComponent someOtherDirective></div>'))
                .toThrowError(
-                   `Template parse errors:\nNo provider for service ("[ERROR ->]<div needsServiceFromHost><div>"): SimpleComponent@0:0`);
+                   /Template parse errors:\nNo provider for service \("\[ERROR ->\]<div needsServiceFromHost><div>"\): .*SimpleComponent.html@0:0/);
          });
 
       it('should not instantiate a directive in a view that has a self dependency on a parent directive',
@@ -512,7 +514,7 @@ export function main() {
                () =>
                    createComponent('<div simpleDirective><div needsDirectiveFromSelf></div></div>'))
                .toThrowError(
-                   `Template parse errors:\nNo provider for SimpleDirective ("<div simpleDirective>[ERROR ->]<div needsDirectiveFromSelf></div></div>"): TestComp@0:21`);
+                   /Template parse errors:\nNo provider for SimpleDirective \("<div simpleDirective>\[ERROR ->\]<div needsDirectiveFromSelf><\/div><\/div>"\): .*TestComp.html@0:21/);
          });
 
       it('should instantiate directives that depend on other directives', fakeAsync(() => {
@@ -560,7 +562,7 @@ export function main() {
             SimpleComponent, {set: {template: '<div needsDirectiveFromHost></div>'}});
         expect(() => createComponent('<div simpleComponent simpleDirective></div>'))
             .toThrowError(
-                `Template parse errors:\nNo provider for SimpleDirective ("[ERROR ->]<div needsDirectiveFromHost></div>"): SimpleComponent@0:0`);
+                /Template parse errors:\nNo provider for SimpleDirective \("\[ERROR ->\]<div needsDirectiveFromHost><\/div>"\): .*SimpleComponent.html@0:0/);
       });
     });
 
@@ -638,6 +640,28 @@ export function main() {
         expect(
             el.children[0].injector.get(NeedsViewContainerRef).viewContainer.element.nativeElement)
             .toBe(el.children[0].nativeElement);
+      });
+
+      it('should inject ViewContainerRef', () => {
+        @Component({template: ''})
+        class TestComp {
+          constructor(public vcr: ViewContainerRef) {}
+        }
+
+        @NgModule({
+          declarations: [TestComp],
+          entryComponents: [TestComp],
+        })
+        class TestModule {
+        }
+
+        const testInjector = {};
+
+        const compFactory = TestBed.configureTestingModule({imports: [TestModule]})
+                                .get(ComponentFactoryResolver)
+                                .resolveComponentFactory(TestComp);
+        const component = compFactory.create(<Injector>testInjector);
+        expect(component.instance.vcr.parentInjector).toBe(testInjector);
       });
 
       it('should inject TemplateRef', () => {

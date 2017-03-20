@@ -153,6 +153,40 @@ describe('tsc-wrapped', () => {
         .catch(e => done.fail(e));
   });
 
+  it('should allow all options disabled with metadata emit', (done) => {
+    write('tsconfig.json', `{
+      "compilerOptions": {
+        "experimentalDecorators": true,
+        "types": [],
+        "outDir": "built",
+        "declaration": false,
+        "module": "es2015",
+        "moduleResolution": "node"
+      },
+      "angularCompilerOptions": {
+        "annotateForClosureCompiler": false,
+        "annotationsAs": "decorators",
+        "skipMetadataEmit": false,
+        "skipTemplateCodegen": true
+      },
+      "files": ["test.ts"]
+    }`);
+
+    main(basePath, {basePath})
+        .then(() => {
+          const out = readOut('js');
+          // TypeScript's decorator emit
+          expect(out).toContain('__decorate');
+          // Not annotated for Closure compiler
+          expect(out).not.toContain('* @param {?} x');
+          expect(() => fs.accessSync(path.join(basePath, 'built', 'test.d.ts'))).toThrow();
+          const metadata = readOut('metadata.json');
+          expect(metadata).toContain('"Comp":{"__symbolic":"class"');
+          done();
+        })
+        .catch(e => done.fail(e));
+  });
+
   it('should allow JSDoc annotations without decorator downleveling', (done) => {
     write('tsconfig.json', `{
       "compilerOptions": {
@@ -260,6 +294,74 @@ describe('tsc-wrapped', () => {
         .then(() => {
           const out = readOut('js.map');
           expect(out).toContain('"sources":["../test.ts"]');
+          done();
+        })
+        .catch(e => done.fail(e));
+  });
+
+  it('should accept input source maps', (done) => {
+    write('tsconfig.json', `{
+      "compilerOptions": {
+        "experimentalDecorators": true,
+        "types": [],
+        "outDir": "built",
+        "declaration": true,
+        "moduleResolution": "node",
+        "target": "es2015",
+        "sourceMap": true
+      },
+      "angularCompilerOptions": {
+        "annotateForClosureCompiler": true
+      },
+      "files": ["test.ts"]
+    }`);
+    // Provide a file called test.ts that has an inline source map
+    // which says that it was transpiled from a file other_test.ts
+    // with exactly the same content.
+    const inputSourceMap =
+        `{"version":3,"sources":["other_test.ts"],"names":[],"mappings":"AAAA,MAAM,EAAE,EAAE,CAAC","file":"../test.ts","sourceRoot":""}`;
+    const encodedSourceMap = new Buffer(inputSourceMap, 'utf8').toString('base64');
+    write('test.ts', `const x = 3;
+//# sourceMappingURL=data:application/json;base64,${encodedSourceMap}`);
+
+    main(basePath, {basePath})
+        .then(() => {
+          const out = readOut('js.map');
+          expect(out).toContain('"sources":["other_test.ts"]');
+          done();
+        })
+        .catch(e => done.fail(e));
+  });
+
+  it(`should accept input source maps that don't match the file name`, (done) => {
+    write('tsconfig.json', `{
+      "compilerOptions": {
+        "experimentalDecorators": true,
+        "types": [],
+        "outDir": "built",
+        "declaration": true,
+        "moduleResolution": "node",
+        "target": "es2015",
+        "sourceMap": true
+      },
+      "angularCompilerOptions": {
+        "annotateForClosureCompiler": true
+      },
+      "files": ["test.ts"]
+    }`);
+    // Provide a file called test.ts that has an inline source map
+    // which says that it was transpiled from a file other_test.ts
+    // with exactly the same content.
+    const inputSourceMap =
+        `{"version":3,"sources":["other_test.ts"],"names":[],"mappings":"AAAA,MAAM,EAAE,EAAE,CAAC","file":"test.ts","sourceRoot":""}`;
+    const encodedSourceMap = new Buffer(inputSourceMap, 'utf8').toString('base64');
+    write('test.ts', `const x = 3;
+//# sourceMappingURL=data:application/json;base64,${encodedSourceMap}`);
+
+    main(basePath, {basePath})
+        .then(() => {
+          const out = readOut('js.map');
+          expect(out).toContain('"sources":["other_test.ts"]');
           done();
         })
         .catch(e => done.fail(e));

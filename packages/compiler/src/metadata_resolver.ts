@@ -6,7 +6,8 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {Attribute, ChangeDetectionStrategy, Component, ComponentFactory, Directive, Host, Inject, Injectable, InjectionToken, ModuleWithProviders, Optional, Provider, Query, RendererType2, SchemaMetadata, Self, SkipSelf, Type, resolveForwardRef, ɵERROR_COMPONENT_TYPE, ɵLIFECYCLE_HOOKS_VALUES, ɵReflectorReader, ɵccf as createComponentFactory, ɵreflector, ɵstringify as stringify} from '@angular/core';
+import {Attribute, ChangeDetectionStrategy, Component, ComponentFactory, Directive, Host, Inject, Injectable, InjectionToken, ModuleWithProviders, Optional, Provider, Query, RendererType2, SchemaMetadata, Self, SkipSelf, Type, resolveForwardRef, ɵConsole as Console, ɵERROR_COMPONENT_TYPE, ɵLIFECYCLE_HOOKS_VALUES, ɵReflectorReader, ɵccf as createComponentFactory, ɵreflector, ɵstringify as stringify} from '@angular/core';
+
 import {StaticSymbol, StaticSymbolCache} from './aot/static_symbol';
 import {ngfactoryFilePath} from './aot/util';
 import {assertArrayOfStrings, assertInterpolationSymbols} from './assertions';
@@ -49,7 +50,7 @@ export class CompileMetadataResolver {
       private _directiveResolver: DirectiveResolver, private _pipeResolver: PipeResolver,
       private _summaryResolver: SummaryResolver<any>,
       private _schemaRegistry: ElementSchemaRegistry,
-      private _directiveNormalizer: DirectiveNormalizer,
+      private _directiveNormalizer: DirectiveNormalizer, private _console: Console,
       @Optional() private _staticSymbolCache: StaticSymbolCache,
       private _reflector: ɵReflectorReader = ɵreflector,
       @Optional() @Inject(ERROR_COLLECTOR_TOKEN) private _errorCollector?: ErrorCollector) {}
@@ -135,13 +136,24 @@ export class CompileMetadataResolver {
     }
   }
 
-  private getComponentFactory(selector: string, dirType: any): StaticSymbol|ComponentFactory<any> {
+  private getComponentFactory(
+      selector: string, dirType: any, inputs: {[key: string]: string},
+      outputs: {[key: string]: string}): StaticSymbol|ComponentFactory<any> {
     if (dirType instanceof StaticSymbol) {
       return this._staticSymbolCache.get(
           ngfactoryFilePath(dirType.filePath), cpl.componentFactoryName(dirType));
     } else {
       const hostView = this.getHostComponentViewClass(dirType);
-      return createComponentFactory(selector, dirType, <any>hostView);
+      // Note: ngContentSelectors will be filled later once the template is
+      // loaded.
+      return createComponentFactory(selector, dirType, <any>hostView, inputs, outputs, []);
+    }
+  }
+
+  private initComponentFactory(
+      factory: StaticSymbol|ComponentFactory<any>, ngContentSelectors: string[]) {
+    if (!(factory instanceof StaticSymbol)) {
+      factory.ngContentSelectors.push(...ngContentSelectors);
     }
   }
 
@@ -155,7 +167,8 @@ export class CompileMetadataResolver {
     return typeSummary && typeSummary.summaryKind === kind ? typeSummary : null;
   }
 
-  private _loadDirectiveMetadata(directiveType: any, isSync: boolean): Promise<any> {
+  private _loadDirectiveMetadata(ngModuleType: any, directiveType: any, isSync: boolean):
+      Promise<any> {
     if (this._directiveCache.has(directiveType)) {
       return;
     }
@@ -184,6 +197,9 @@ export class CompileMetadataResolver {
         componentFactory: metadata.componentFactory,
         template: templateMetadata
       });
+      if (templateMetadata) {
+        this.initComponentFactory(metadata.componentFactory, templateMetadata.ngContentSelectors);
+      }
       this._directiveCache.set(directiveType, normalizedDirMeta);
       this._summaryCache.set(directiveType, normalizedDirMeta.toSummary());
       return normalizedDirMeta;
@@ -191,6 +207,7 @@ export class CompileMetadataResolver {
 
     if (metadata.isComponent) {
       const templateMeta = this._directiveNormalizer.normalizeTemplate({
+        ngModuleType,
         componentType: directiveType,
         moduleUrl: componentModuleUrl(this._reflector, directiveType, annotation),
         encapsulation: metadata.template.encapsulation,
@@ -249,7 +266,8 @@ export class CompileMetadataResolver {
         styles: dirMeta.styles,
         styleUrls: dirMeta.styleUrls,
         animations: animations,
-        interpolation: dirMeta.interpolation
+        interpolation: dirMeta.interpolation,
+        isInline: !!dirMeta.template
       });
     }
 
@@ -316,10 +334,12 @@ export class CompileMetadataResolver {
       componentViewType: nonNormalizedTemplateMetadata ? this.getComponentViewClass(directiveType) :
                                                          undefined,
       rendererType: nonNormalizedTemplateMetadata ? this.getRendererType(directiveType) : undefined,
-      componentFactory: nonNormalizedTemplateMetadata ?
-          this.getComponentFactory(selector, directiveType) :
-          undefined
+      componentFactory: undefined
     });
+    if (nonNormalizedTemplateMetadata) {
+      metadata.componentFactory =
+          this.getComponentFactory(selector, directiveType, metadata.inputs, metadata.outputs);
+    }
     cacheEntry = {metadata, annotation: dirMeta};
     this._nonNormalizedDirectiveCache.set(directiveType, cacheEntry);
     return cacheEntry;
@@ -378,7 +398,7 @@ export class CompileMetadataResolver {
     const loading: Promise<any>[] = [];
     if (ngModule) {
       ngModule.declaredDirectives.forEach((id) => {
-        const promise = this._loadDirectiveMetadata(id.reference, isSync);
+        const promise = this._loadDirectiveMetadata(moduleType, id.reference, isSync);
         if (promise) {
           loading.push(promise);
         }
@@ -430,7 +450,7 @@ export class CompileMetadataResolver {
           if (!importedModuleSummary) {
             this._reportError(
                 syntaxError(
-                    `Unexpected ${this._getTypeDescriptor(importedType)} '${stringifyType(importedType)}' imported by the module '${stringifyType(moduleType)}'`),
+                    `Unexpected ${this._getTypeDescriptor(importedType)} '${stringifyType(importedType)}' imported by the module '${stringifyType(moduleType)}'. Please add a @NgModule annotation.`),
                 moduleType);
             return;
           }
@@ -488,7 +508,7 @@ export class CompileMetadataResolver {
         } else {
           this._reportError(
               syntaxError(
-                  `Unexpected ${this._getTypeDescriptor(declaredType)} '${stringifyType(declaredType)}' declared by the module '${stringifyType(moduleType)}'`),
+                  `Unexpected ${this._getTypeDescriptor(declaredType)} '${stringifyType(declaredType)}' declared by the module '${stringifyType(moduleType)}'. Please add a @Pipe/@Directive/@Component annotation.`),
               moduleType);
           return;
         }
@@ -662,7 +682,10 @@ export class CompileMetadataResolver {
   }
 
   getInjectableSummary(type: any): cpl.CompileTypeSummary {
-    return {summaryKind: cpl.CompileSummaryKind.Injectable, type: this._getTypeMetadata(type)};
+    return {
+      summaryKind: cpl.CompileSummaryKind.Injectable,
+      type: this._getTypeMetadata(type, null, false)
+    };
   }
 
   private _getInjectableMetadata(type: Type<any>, dependencies: any[] = null):
@@ -674,11 +697,12 @@ export class CompileMetadataResolver {
     return this._getTypeMetadata(type, dependencies);
   }
 
-  private _getTypeMetadata(type: Type<any>, dependencies: any[] = null): cpl.CompileTypeMetadata {
+  private _getTypeMetadata(type: Type<any>, dependencies: any[] = null, throwOnUnknownDeps = true):
+      cpl.CompileTypeMetadata {
     const identifier = this._getIdentifierMetadata(type);
     return {
       reference: identifier.reference,
-      diDeps: this._getDependenciesMetadata(identifier.reference, dependencies),
+      diDeps: this._getDependenciesMetadata(identifier.reference, dependencies, throwOnUnknownDeps),
       lifecycleHooks:
           ɵLIFECYCLE_HOOKS_VALUES.filter(hook => hasLifecycleHook(hook, identifier.reference)),
     };
@@ -739,8 +763,9 @@ export class CompileMetadataResolver {
     return pipeMeta;
   }
 
-  private _getDependenciesMetadata(typeOrFunc: Type<any>|Function, dependencies: any[]):
-      cpl.CompileDiDependencyMetadata[] {
+  private _getDependenciesMetadata(
+      typeOrFunc: Type<any>|Function, dependencies: any[],
+      throwOnUnknownDeps = true): cpl.CompileDiDependencyMetadata[] {
     let hasUnknownDeps = false;
     const params = dependencies || this._reflector.parameters(typeOrFunc) || [];
 
@@ -794,10 +819,13 @@ export class CompileMetadataResolver {
     if (hasUnknownDeps) {
       const depsTokens =
           dependenciesMetadata.map((dep) => dep ? stringifyType(dep.token) : '?').join(', ');
-      this._reportError(
-          syntaxError(
-              `Can't resolve all parameters for ${stringifyType(typeOrFunc)}: (${depsTokens}).`),
-          typeOrFunc);
+      const message =
+          `Can't resolve all parameters for ${stringifyType(typeOrFunc)}: (${depsTokens}).`;
+      if (throwOnUnknownDeps) {
+        this._reportError(syntaxError(message), typeOrFunc);
+      } else {
+        this._console.warn(`Warning: ${message} This will become an error in Angular v5.x`);
+      }
     }
 
     return dependenciesMetadata;

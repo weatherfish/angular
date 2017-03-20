@@ -17,6 +17,7 @@ PKGS=(
   @types/{node@6.0.38,jasmine@2.2.33}
   jasmine@2.4.1
   webpack@2.1.0-beta.21
+  source-map-loader@0.2.0
   @angular2-material/{core,button}@2.0.0-alpha.8-1
 )
 
@@ -53,7 +54,8 @@ cp -v package.json $TMP
   ./node_modules/.bin/ng-xi18n -p tsconfig-xi18n.json --i18nFormat=xlf --locale=fr
   ./node_modules/.bin/ng-xi18n -p tsconfig-xi18n.json --i18nFormat=xmb --outFile=custom_file.xmb
 
-  node test/test_summaries.js
+  # Removed until #15219 is fixed
+  # node test/test_summaries.js
   node test/test_ngtools_api.js
 
   ./node_modules/.bin/jasmine init

@@ -1,14 +1,21 @@
 import { async, inject, ComponentFixture, TestBed } from '@angular/core/testing';
 import { APP_BASE_HREF } from '@angular/common';
+import { By } from '@angular/platform-browser';
 import { AppComponent } from './app.component';
 import { AppModule } from './app.module';
 import { GaService } from 'app/shared/ga.service';
 import { SearchService } from 'app/search/search.service';
+import { SearchResultsComponent } from 'app/search/search-results/search-results.component';
+import { SearchBoxComponent } from 'app/search/search-box/search-box.component';
+import { AutoScrollService } from 'app/shared/auto-scroll.service';
 import { MockSearchService } from 'testing/search.service';
+import { LocationService } from 'app/shared/location.service';
+import { MockLocationService } from 'testing/location.service';
 
 describe('AppComponent', () => {
   let component: AppComponent;
   let fixture: ComponentFixture<AppComponent>;
+  const initialUrl = 'a/b';
 
   beforeEach(async(() => {
     TestBed.configureTestingModule({
@@ -16,7 +23,8 @@ describe('AppComponent', () => {
       providers: [
         { provide: APP_BASE_HREF, useValue: '/' },
         { provide: SearchService, useClass: MockSearchService },
-        { provide: GaService, useClass: TestGaService }
+        { provide: GaService, useClass: TestGaService },
+        { provide: LocationService, useFactory: () => new MockLocationService(initialUrl) }
       ]
     });
     TestBed.compileComponents();
@@ -25,6 +33,7 @@ describe('AppComponent', () => {
   beforeEach(() => {
     fixture = TestBed.createComponent(AppComponent);
     component = fixture.componentInstance;
+    fixture.detectChanges();
   });
 
   it('should create', () => {
@@ -33,17 +42,17 @@ describe('AppComponent', () => {
 
   describe('google analytics', () => {
     it('should call gaService.locationChanged with initial URL', () => {
-      const url = window.location.pathname.substr(1); // strip leading '/'
       const { locationChanged } = TestBed.get(GaService) as TestGaService;
       expect(locationChanged.calls.count()).toBe(1, 'gaService.locationChanged');
       const args = locationChanged.calls.first().args;
-      expect(args[0]).toBe(url);
+      expect(args[0]).toBe(initialUrl);
     });
 
     // Todo: add test to confirm tracking URL when navigate.
   });
 
   describe('isHamburgerVisible', () => {
+    console.log('PENDING: AppComponent isHamburgerVisible');
   });
 
   describe('onResize', () => {
@@ -63,12 +72,61 @@ describe('AppComponent', () => {
     console.log('PENDING: AppComponent navigationViews');
   });
 
+  describe('autoScrolling', () => {
+    it('should AutoScrollService.scroll when the url changes', () => {
+      const locationService: MockLocationService = fixture.debugElement.injector.get(LocationService) as any;
+      const scrollService: AutoScrollService = fixture.debugElement.injector.get(AutoScrollService);
+      spyOn(scrollService, 'scroll');
+      locationService.urlSubject.next('some/url#fragment');
+      expect(scrollService.scroll).toHaveBeenCalledWith(jasmine.any(HTMLElement));
+    });
+
+    it('should be called when a document has been rendered', () => {
+      const scrollService: AutoScrollService = fixture.debugElement.injector.get(AutoScrollService);
+      spyOn(scrollService, 'scroll');
+      component.onDocRendered(null);
+      expect(scrollService.scroll).toHaveBeenCalledWith(jasmine.any(HTMLElement));
+    });
+  });
+
   describe('initialisation', () => {
     it('should initialize the search worker', inject([SearchService], (searchService: SearchService) => {
       fixture.detectChanges(); // triggers ngOnInit
       expect(searchService.initWorker).toHaveBeenCalled();
       expect(searchService.loadIndex).toHaveBeenCalled();
     }));
+  });
+
+  describe('click intercepting', () => {
+    it('should intercept clicks on anchors and call `location.handleAnchorClick()`',
+            inject([LocationService], (location: LocationService) => {
+      const anchorElement: HTMLAnchorElement = document.createElement('a');
+      anchorElement.href = 'some/local/url';
+      fixture.nativeElement.append(anchorElement);
+      anchorElement.click();
+      expect(location.handleAnchorClick).toHaveBeenCalledWith(anchorElement, 0, false, false);
+    }));
+
+    it('should intercept clicks not on the search elements and hide the search results', () => {
+      const searchResults: SearchResultsComponent = fixture.debugElement.query(By.directive(SearchResultsComponent)).componentInstance;
+      const docViewer = fixture.debugElement.query(By.css('aio-doc-viewer'));
+      spyOn(searchResults, 'hideResults');
+      docViewer.nativeElement.click();
+      expect(searchResults.hideResults).toHaveBeenCalled();
+    });
+
+    it('should not intercept clicks on any of the search elements', () => {
+      const searchResults = fixture.debugElement.query(By.directive(SearchResultsComponent));
+      const searchResultsComponent: SearchResultsComponent = searchResults.componentInstance;
+      const searchBox = fixture.debugElement.query(By.directive(SearchBoxComponent));
+      spyOn(searchResultsComponent, 'hideResults');
+
+      searchResults.nativeElement.click();
+      expect(searchResultsComponent.hideResults).not.toHaveBeenCalled();
+
+      searchBox.nativeElement.click();
+      expect(searchResultsComponent.hideResults).not.toHaveBeenCalled();
+    });
   });
 });
 

@@ -18,7 +18,9 @@ export const CATCH_ERROR_VAR = o.variable('error');
 export const CATCH_STACK_VAR = o.variable('stack');
 
 export abstract class OutputEmitter {
-  abstract emitStatements(moduleUrl: string, stmts: o.Statement[], exportedVars: string[]): string;
+  abstract emitStatements(
+      srcFilePath: string, genFilePath: string, stmts: o.Statement[], exportedVars: string[],
+      preamble?: string): string;
 }
 
 class _EmittedLine {
@@ -89,13 +91,27 @@ export class EmitterVisitorContext {
         .join('\n');
   }
 
-  toSourceMapGenerator(file: string|null = null, startsAtLine: number = 0): SourceMapGenerator {
-    const map = new SourceMapGenerator(file);
+  toSourceMapGenerator(sourceFilePath: string, genFilePath: string, startsAtLine: number = 0):
+      SourceMapGenerator {
+    const map = new SourceMapGenerator(genFilePath);
+
+    let firstOffsetMapped = false;
+    const mapFirstOffsetIfNeeded = () => {
+      if (!firstOffsetMapped) {
+        // Add a single space so that tools won't try to load the file from disk.
+        // Note: We are using virtual urls like `ng:///`, so we have to
+        // provide a content here.
+        map.addSource(sourceFilePath, ' ').addMapping(0, sourceFilePath, 0, 0);
+        firstOffsetMapped = true;
+      }
+    };
+
     for (let i = 0; i < startsAtLine; i++) {
       map.addLine();
+      mapFirstOffsetIfNeeded();
     }
 
-    this.sourceLines.forEach(line => {
+    this.sourceLines.forEach((line, lineIdx) => {
       map.addLine();
 
       const spans = line.srcSpans;
@@ -107,13 +123,17 @@ export class EmitterVisitorContext {
         col0 += parts[spanIdx].length;
         spanIdx++;
       }
+      if (spanIdx < spans.length && lineIdx === 0 && col0 === 0) {
+        firstOffsetMapped = true;
+      } else {
+        mapFirstOffsetIfNeeded();
+      }
 
       while (spanIdx < spans.length) {
         const span = spans[spanIdx];
         const source = span.start.file;
         const sourceLine = span.start.line;
         const sourceCol = span.start.col;
-
         map.addSource(source.url, source.content)
             .addMapping(col0, source.url, sourceLine, sourceCol);
 
@@ -420,7 +440,12 @@ export abstract class AbstractEmitterVisitor implements o.StatementVisitor, o.Ex
     ctx.print(ast, `}`, useNewLine);
     return null;
   }
-
+  visitCommaExpr(ast: o.CommaExpr, ctx: EmitterVisitorContext): any {
+    ctx.print(ast, '(');
+    this.visitAllExpressions(ast.parts, ctx, ',');
+    ctx.print(ast, ')');
+    return null;
+  }
   visitAllExpressions(
       expressions: o.Expression[], ctx: EmitterVisitorContext, separator: string,
       newLine: boolean = false): void {

@@ -1264,13 +1264,12 @@ function declareTests({useJit}: {useJit: boolean}) {
         TestBed.createComponent(SomeComponent);
 
         expect(noSelectorComponentFactory.selector).toBe('ng-component');
+
         expect(
             getDOM()
-                .nodeName(
-                    noSelectorComponentFactory.create(TestBed.get(Injector)).location.nativeElement)
+                .nodeName(noSelectorComponentFactory.create(Injector.NULL).location.nativeElement)
                 .toLowerCase())
             .toEqual('ng-component');
-
       });
     });
 
@@ -1280,7 +1279,7 @@ function declareTests({useJit}: {useJit: boolean}) {
 
         expect(() => TestBed.createComponent(MyComp))
             .toThrowError(
-                `Unexpected value '${stringify(SomeDirectiveMissingAnnotation)}' declared by the module 'DynamicTestModule'`);
+                `Unexpected value '${stringify(SomeDirectiveMissingAnnotation)}' declared by the module 'DynamicTestModule'. Please add a @Pipe/@Directive/@Component annotation.`);
       });
 
       it('should report a meaningful error when a component is missing view annotation', () => {
@@ -1414,8 +1413,8 @@ function declareTests({useJit}: {useJit: boolean}) {
           TestBed.createComponent(MyComp);
           throw 'Should throw';
         } catch (e) {
-          expect(e.message).toEqual(
-              `Template parse errors:\nCan't bind to 'unknown' since it isn't a known property of 'div'. ("<div [ERROR ->]unknown="{{ctxProp}}"></div>"): MyComp@0:5`);
+          expect(e.message).toMatch(
+              /Template parse errors:\nCan't bind to 'unknown' since it isn't a known property of 'div'. \("<div \[ERROR ->\]unknown="{{ctxProp}}"><\/div>"\): .*MyComp.html@0:5/);
         }
       });
 

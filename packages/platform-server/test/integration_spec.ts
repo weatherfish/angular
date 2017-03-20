@@ -6,8 +6,9 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {PlatformLocation, isPlatformServer} from '@angular/common';
-import {ApplicationRef, CompilerFactory, Component, NgModule, NgModuleRef, NgZone, PLATFORM_ID, PlatformRef, destroyPlatform, getPlatform} from '@angular/core';
+import {animate, style, transition, trigger} from '@angular/animations';
+import {APP_BASE_HREF, PlatformLocation, isPlatformServer} from '@angular/common';
+import {ApplicationRef, CompilerFactory, Component, HostListener, NgModule, NgModuleRef, NgZone, PLATFORM_ID, PlatformRef, destroyPlatform, getPlatform} from '@angular/core';
 import {TestBed, async, inject} from '@angular/core/testing';
 import {Http, HttpModule, Response, ResponseOptions, XHRBackend} from '@angular/http';
 import {MockBackend, MockConnection} from '@angular/http/testing';
@@ -57,6 +58,9 @@ class TitleAppModule {
 class MyAsyncServerApp {
   text = '';
 
+  @HostListener('window:scroll')
+  track() { console.error('scroll'); }
+
   ngOnInit() {
     Promise.resolve(null).then(() => setTimeout(() => { this.text = 'Works!'; }, 10));
   }
@@ -68,6 +72,37 @@ class MyAsyncServerApp {
   bootstrap: [MyAsyncServerApp]
 })
 class AsyncServerModule {
+}
+
+@Component({selector: 'app', template: '<svg><use xlink:href="#clear"></use></svg>'})
+class SVGComponent {
+}
+
+@NgModule({
+  declarations: [SVGComponent],
+  imports: [BrowserModule.withServerTransition({appId: 'svg-server'}), ServerModule],
+  bootstrap: [SVGComponent]
+})
+class SVGServerModule {
+}
+
+@Component({
+  selector: 'app',
+  template: '<div @myAnimation>{{text}}</div>',
+  animations: [trigger(
+      'myAnimation',
+      [transition('void => *', [style({'opacity': '0'}), animate(500, style({'opacity': '1'}))])])],
+})
+class MyAnimationApp {
+  text = 'Works!';
+}
+
+@NgModule({
+  declarations: [MyAnimationApp],
+  imports: [BrowserModule.withServerTransition({appId: 'anim-server'}), ServerModule],
+  bootstrap: [MyAnimationApp]
+})
+class AnimationServerModule {
 }
 
 @Component({selector: 'app', template: `Works!`, styles: [':host { color: red; }']})
@@ -129,7 +164,13 @@ export function main() {
          platform.bootstrapModule(ExampleModule).then((moduleRef) => {
            expect(isPlatformServer(moduleRef.injector.get(PLATFORM_ID))).toBe(true);
            const doc = moduleRef.injector.get(DOCUMENT);
+
+           expect(doc.head).toBe(getDOM().querySelector(doc, 'head'));
+           expect(doc.body).toBe(getDOM().querySelector(doc, 'body'));
+           expect((<any>doc)._window).toEqual({});
+
            expect(getDOM().getText(doc)).toEqual('Works!');
+
            platform.destroy();
          });
        }));
@@ -167,6 +208,19 @@ export function main() {
            const title = getDOM().querySelector(doc, 'title');
            expect(getDOM().getText(title)).toBe('Test App Title');
            expect(state.renderToString()).toContain('<title>Test App Title</title>');
+         });
+       }));
+
+    it('should get base href from document', async(() => {
+         const platform = platformDynamicServer([{
+           provide: INITIAL_CONFIG,
+           useValue:
+               {document: '<html><head><base href="/"></head><body><app></app></body></html>'}
+         }]);
+         platform.bootstrapModule(ExampleModule).then((moduleRef) => {
+           const location = moduleRef.injector.get(PlatformLocation);
+           expect(location.getBaseHrefFromDOM()).toEqual('/');
+           platform.destroy();
          });
        }));
 
@@ -309,6 +363,24 @@ export function main() {
              called = true;
            });
          })));
+
+      it('works with SVG elements', async(() => {
+           renderModule(SVGServerModule, {document: doc}).then(output => {
+             expect(output).toBe(
+                 '<html><head></head><body><app ng-version="0.0.0-PLACEHOLDER">' +
+                 '<svg><use xlink:href="#clear"></use></svg></app></body></html>');
+             called = true;
+           });
+         }));
+
+      it('works with animation', async(() => {
+           renderModule(AnimationServerModule, {document: doc}).then(output => {
+             expect(output).toBe(
+                 '<html><head></head><body><app ng-version="0.0.0-PLACEHOLDER">' +
+                 '<div>Works!</div></app></body></html>');
+             called = true;
+           });
+         }));
     });
 
     describe('http', () => {

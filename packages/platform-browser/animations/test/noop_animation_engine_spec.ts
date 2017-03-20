@@ -6,9 +6,8 @@
  * found in the LICENSE file at https://angular.io/license
  */
 import {state, style, trigger} from '@angular/animations';
+import {ɵNoopAnimationEngine as NoopAnimationEngine} from '@angular/animations/browser';
 import {el} from '@angular/platform-browser/testing/src/browser_util';
-
-import {NoopAnimationEngine} from '../src/render/noop_animation_engine';
 
 export function main() {
   describe('NoopAnimationEngine', () => {
@@ -21,8 +20,8 @@ export function main() {
        () => {
          const engine = new NoopAnimationEngine();
 
-         const elm1 = {};
-         const elm2 = {};
+         const elm1 = {nodeType: 1};
+         const elm2 = {nodeType: 1};
          engine.onRemove(elm1, capture('1'));
          engine.onRemove(elm2, capture('2'));
 
@@ -159,7 +158,7 @@ export function main() {
 
     it('should fire a removal listener even if the listener is deregistered prior to flush', () => {
       const engine = new NoopAnimationEngine();
-      const elm = {};
+      const elm = {nodeType: 1};
 
       const fn = engine.listen(elm, 'trig', 'start', capture('removal listener'));
       fn();

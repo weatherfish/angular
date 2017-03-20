@@ -98,8 +98,8 @@ class HelloCmpUsingCustomElement {
 }
 
 class MockConsole {
-  res: any[] = [];
-  error(s: any): void { this.res.push(s); }
+  res: any[][] = [];
+  error(...s: any[]): void { this.res.push(s); }
 }
 
 
@@ -159,7 +159,7 @@ export function main() {
     it('should throw if bootstrapped Directive is not a Component',
        inject([AsyncTestCompleter], (done: AsyncTestCompleter) => {
          const logger = new MockConsole();
-         const errorHandler = new ErrorHandler(false);
+         const errorHandler = new ErrorHandler();
          errorHandler._console = logger as any;
          expect(
              () => bootstrap(
@@ -171,7 +171,7 @@ export function main() {
     it('should throw if no element is found',
        inject([AsyncTestCompleter], (async: AsyncTestCompleter) => {
          const logger = new MockConsole();
-         const errorHandler = new ErrorHandler(false);
+         const errorHandler = new ErrorHandler();
          errorHandler._console = logger as any;
          bootstrap(NonExistentComp, [
            {provide: ErrorHandler, useValue: errorHandler}
@@ -187,7 +187,7 @@ export function main() {
       it('should forward the error to promise when bootstrap fails',
          inject([AsyncTestCompleter], (async: AsyncTestCompleter) => {
            const logger = new MockConsole();
-           const errorHandler = new ErrorHandler(false);
+           const errorHandler = new ErrorHandler();
            errorHandler._console = logger as any;
 
            const refPromise =
@@ -202,14 +202,14 @@ export function main() {
       it('should invoke the default exception handler when bootstrap fails',
          inject([AsyncTestCompleter], (async: AsyncTestCompleter) => {
            const logger = new MockConsole();
-           const errorHandler = new ErrorHandler(false);
+           const errorHandler = new ErrorHandler();
            errorHandler._console = logger as any;
 
            const refPromise =
                bootstrap(NonExistentComp, [{provide: ErrorHandler, useValue: errorHandler}]);
            refPromise.then(null, (reason) => {
-             expect(logger.res.join(''))
-                 .toContain('The selector "non-existent" did not match any elements');
+             expect(logger.res[0].join('#'))
+                 .toContain('ERROR#Error: The selector "non-existent" did not match any elements');
              async.done();
              return null;
            });
